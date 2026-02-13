@@ -10,7 +10,7 @@ export const MAPS = [
         unlockTownLv: 1,
         mapLv: 1,
         tiles: 24,
-        dice: { monster: [1, 3], treasure: [2, 4], event: [1, 2] },
+        dice: { monster: [3, 5], treasure: [3, 5], event: [3, 5] },
         monsterPool: ['m_goblin', 'm_bat', 'm_slime'],
         desc: '울창한 숲 속에 고블린과 박쥐가 횡행하는 초보 모험가의 시험장.',
     },

@@ -135,6 +135,23 @@ export function moveToSafeBag(slotIndex) {
     return true;
 }
 
+/**
+ * Move an item from safe bag to main inventory.
+ */
+export function retrieveFromSafeBag(slotIndex) {
+    if (!inv) return false;
+    const item = inv.safeBag[slotIndex];
+    if (!item) return false;
+
+    // Try to add to main inventory
+    const added = addItem(item);
+    if (added) {
+        inv.safeBag[slotIndex] = null;
+        return true;
+    }
+    return false;
+}
+
 // ─── Weapon durability ───
 
 /**
@@ -163,4 +180,54 @@ export function getWeaponDamage() {
     if (!inv || !inv.equipped) return 1;
     const w = inv.equipped;
     return Math.floor(Math.random() * (w.dmgMax - w.dmgMin + 1)) + w.dmgMin;
+}
+
+// ─── Crafting helpers ───
+
+/**
+ * Count how many of an item (by id) exist in inventory slots.
+ */
+export function countItem(itemId) {
+    if (!inv) return 0;
+    let count = 0;
+    for (const slot of inv.slots) {
+        if (slot && slot.id === itemId) count += (slot.qty || 1);
+    }
+    return count;
+}
+
+/**
+ * Check if all ingredients in a recipe are available.
+ * @param {{ id: string, qty: number }[]} ingredients
+ * @returns {boolean}
+ */
+export function hasMaterials(ingredients) {
+    if (!inv) return false;
+    for (const ing of ingredients) {
+        if (countItem(ing.id) < ing.qty) return false;
+    }
+    return true;
+}
+
+/**
+ * Consume materials from inventory for crafting.
+ * @param {{ id: string, qty: number }[]} ingredients
+ * @returns {boolean} success
+ */
+export function consumeMaterials(ingredients) {
+    if (!hasMaterials(ingredients)) return false;
+
+    for (const ing of ingredients) {
+        let remaining = ing.qty;
+        for (let i = 0; i < inv.slots.length && remaining > 0; i++) {
+            const slot = inv.slots[i];
+            if (slot && slot.id === ing.id) {
+                const take = Math.min(slot.qty || 1, remaining);
+                slot.qty = (slot.qty || 1) - take;
+                remaining -= take;
+                if (slot.qty <= 0) inv.slots[i] = null;
+            }
+        }
+    }
+    return true;
 }

@@ -2,6 +2,7 @@
 // Manages runtime state during dungeon gameplay (separate from global gameState)
 
 import { setTileObject, movePlayerToken } from './mapEngine.js';
+import { SETTINGS } from './data/settings.js';
 
 /** @type {object} */
 let ds = {};
@@ -203,6 +204,13 @@ export function animateMovement(path, sideLength) {
                 return;
             }
             movePlayerToken(path[i], sideLength, true);
+
+            // Heal HP per step (from settings)
+            if (ds.currentHp < ds.maxHp) {
+                ds.currentHp = Math.min(ds.maxHp, ds.currentHp + SETTINGS.hpRegenPerTile);
+                triggerUpdate(); // Refresh HUD
+            }
+
             i++;
             setTimeout(step, 350);
         }
@@ -238,7 +246,7 @@ export function handleTileInteraction() {
     }
 
     if (tile.object === 'chest') {
-        log(`📦 보물상자 발견! (아이템 획득 — 추후 구현)`);
+        log(`📦 보물상자 발견!`);
         // Clear the chest
         tile.object = null;
         tile.objectData = null;

@@ -12,7 +12,8 @@ import { initCombat } from '../combatEngine.js';
 import { showCombat } from '../combatOverlay.js';
 import { initInventory, getInventory, addItem } from '../inventory.js';
 import { buildInlineInventoryHTML, refreshInlineInventory, showItemToast } from '../inventoryOverlay.js';
-import { rollChestLoot, rollEvent, ITEMS } from '../data/items.js';
+import { rollChestLoot, rollEvent, rollMonsterLoot, ITEMS } from '../data/items.js';
+import { openCraftingOverlay } from '../craftingOverlay.js';
 
 
 let boardRendered = false;
@@ -42,6 +43,7 @@ export function mount(container, params = {}) {
           <span class="topbar-turn" id="topTurn">Turn ${ds.turn}</span>
         </div>
         <div class="topbar-actions">
+          <button class="btn-craft" id="btnCraft">⚒️ 제작</button>
           <div class="topbar-wanderer">
             <span>${wanderer?.portrait || ''}</span>
             <span>${wanderer?.name || ''}</span>
@@ -105,6 +107,11 @@ export function mount(container, params = {}) {
   // Return button
   document.getElementById('btnReturn').addEventListener('click', () => {
     changeScene('town');
+  });
+
+  // Crafting button
+  document.getElementById('btnCraft').addEventListener('click', () => {
+    openCraftingOverlay();
   });
 
   // Render the board
@@ -303,6 +310,30 @@ async function handleRollMove() {
         setTileObject(tile.index, null);
         addLog(`🏆 ${monsterInstance.name} 처치!`);
         refreshHUD(getDungeonState());
+        // Drop loot
+        const loot = rollMonsterLoot(monsterInstance);
+        if (loot) {
+          const added = addItem(loot);
+          if (added) {
+            // Delay log slightly
+            setTimeout(() => {
+              const logEl = document.getElementById('logContent');
+              if (logEl) {
+                const entry = document.createElement('p');
+                entry.className = 'log-entry log-new';
+                entry.textContent = `> 💎 획득: ${loot.emoji} ${loot.name}`;
+                logEl.appendChild(entry);
+                logEl.scrollTop = logEl.scrollHeight;
+              }
+            }, 150);
+            showItemToast(loot);
+          } else {
+            addLog(`💎 가방이 가득 찼습니다.`);
+          }
+        }
+
+        refreshHUD(getDungeonState());
+        refreshInlineInventory();
         showMoveUI();
       },
       onDefeat: () => {

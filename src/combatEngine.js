@@ -89,7 +89,14 @@ export function getHitChance(part) {
     if (!combat) return 0;
 
     const ds = getDungeonState();
-    let hitChance = (combat.player.dex * 2) + PART_BONUS[part] - combat.monster.eva;
+
+    // Base hit chance from monster data (default to old logic if missing)
+    let baseHit = 50 + PART_BONUS[part];
+    if (combat.monster.partsHit && typeof combat.monster.partsHit[part] === 'number') {
+        baseHit = combat.monster.partsHit[part];
+    }
+
+    let hitChance = baseHit + (combat.player.dex * 2) - combat.monster.eva;
 
     // Trait: 예리한 눈 → +5%
     if (combat.player.traits.some((t) => t.id === 't_pos_eagle_eye')) {

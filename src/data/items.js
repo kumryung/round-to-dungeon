@@ -49,6 +49,51 @@ export const ITEMS = {
         desc: 'HP/Sanity 완전 회복 + 상태이상 제거',
         effect: 'full_restore', stackable: true,
     },
+    // ── Materials ──
+    mat_wood: {
+        id: 'mat_wood', type: 'material', name: '나무/막대기', emoji: '🪵',
+        desc: '기본적인 목재', stackable: true,
+    },
+    mat_iron_ore: {
+        id: 'mat_iron_ore', type: 'material', name: '철광석', emoji: '🪨',
+        desc: '가장 기초적인 금속 재료', stackable: true,
+    },
+    mat_iron_stud: {
+        id: 'mat_iron_stud', type: 'material', name: '철 징', emoji: '📌',
+        desc: '방패나 둔기에 박아 파괴력을 높이는 쇠못', stackable: true,
+    },
+    mat_leather_strap: {
+        id: 'mat_leather_strap', type: 'material', name: '가죽끈', emoji: '🧵',
+        desc: '기본적인 손잡이 마감이나 결속용 재료', stackable: true,
+    },
+    mat_sticky_sap: {
+        id: 'mat_sticky_sap', type: 'material', name: '접착용 수액', emoji: '🍯',
+        desc: '부품을 고정하는 천연 접착제', stackable: true,
+    },
+    mat_sharp_blade: {
+        id: 'mat_sharp_blade', type: 'material', name: '날카로운 칼날', emoji: '🔪',
+        desc: '철광석을 가공해 만든 기본 날붙이', stackable: true,
+    },
+    mat_steel_part: {
+        id: 'mat_steel_part', type: 'material', name: '강철 부품', emoji: '⚙️',
+        desc: '정교한 무기를 만들기 위한 제련된 강철', stackable: true,
+    },
+    mat_beast_tendon: {
+        id: 'mat_beast_tendon', type: 'material', name: '마수의 힘줄', emoji: '🪢',
+        desc: '무기의 탄성을 높이거나 부품을 잇는 질긴 끈', stackable: true,
+    },
+    mat_mana_stone: {
+        id: 'mat_mana_stone', type: 'material', name: '마나석', emoji: '💎',
+        desc: '마법적인 힘을 공급하는 희귀 광석', stackable: true,
+    },
+    mat_rune: {
+        id: 'mat_rune', type: 'material', name: '룬', emoji: '🔮',
+        desc: '속성 공격 및 마법 부여 재료', stackable: true,
+    },
+    mat_mana_heart: {
+        id: 'mat_mana_heart', type: 'material', name: '마력의 심장', emoji: '❤️‍🔥',
+        desc: '무기에 생명을 불어넣는 최상위 마법 재료', stackable: true,
+    },
 };
 
 // ─── Treasure Chest Loot Tables ───
@@ -66,6 +111,20 @@ export const CHEST_LOOT = [
     { id: 't_holywater', weight: 6 },
     // Rare
     { id: 'c_elixir', weight: 3 },
+    // Materials (common)
+    { id: 'mat_wood', weight: 15 },
+    { id: 'mat_iron_ore', weight: 12 },
+    { id: 'mat_leather_strap', weight: 10 },
+    { id: 'mat_iron_stud', weight: 8 },
+    { id: 'mat_sticky_sap', weight: 8 },
+    // Materials (uncommon)
+    { id: 'mat_sharp_blade', weight: 6 },
+    { id: 'mat_steel_part', weight: 5 },
+    { id: 'mat_beast_tendon', weight: 4 },
+    // Materials (rare)
+    { id: 'mat_mana_stone', weight: 3 },
+    { id: 'mat_rune', weight: 2 },
+    { id: 'mat_mana_heart', weight: 1 },
 ];
 
 /**
@@ -97,4 +156,24 @@ export const EVENTS = [
  */
 export function rollEvent() {
     return EVENTS[Math.floor(Math.random() * EVENTS.length)];
+}
+
+/**
+ * Roll for monster loot.
+ * Uses a fixed range of 0-100. If the sum of weights is less than 100,
+ * the remainder is the chance to drop nothing.
+ */
+export function rollMonsterLoot(monster) {
+    if (!monster.loot || monster.loot.length === 0) return null;
+
+    const roll = Math.random() * 100;
+    let current = 0;
+
+    for (const entry of monster.loot) {
+        current += entry.weight;
+        if (roll < current) {
+            return ITEMS[entry.id] || null; // Return item object
+        }
+    }
+    return null; // No drop (e.g. rolled 90 but weights sum to 70)
 }

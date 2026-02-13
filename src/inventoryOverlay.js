@@ -2,7 +2,7 @@
 // Always-visible inventory panel rendered below the game board.
 // Refreshes in real-time on any item change.
 
-import { getInventory, useItem, equipFromSlot, removeItem, moveToSafeBag } from './inventory.js';
+import { getInventory, useItem, equipFromSlot, removeItem, moveToSafeBag, retrieveFromSafeBag } from './inventory.js';
 import { getDungeonState } from './dungeonState.js';
 import { getCombatState } from './combatEngine.js';
 import { gradeColor } from './data/weapons.js';
@@ -122,8 +122,8 @@ function bindPanelSlotActions(panel) {
 }
 
 function showInlinePopup(panel, slotEl, slotIndex, isSafe) {
-    // Remove previous popup
-    panel.querySelector('.inv-inline-popup')?.remove();
+    // Remove previous popups
+    document.querySelectorAll('.inv-inline-popup').forEach(el => el.remove());
 
     const inv = getInventory();
     const arr = isSafe ? inv.safeBag : inv.slots;
@@ -151,13 +151,22 @@ function showInlinePopup(panel, slotEl, slotIndex, isSafe) {
     <div class="popup-actions">
       ${isWeapon && !isSafe ? `<button class="popup-btn popup-equip" data-action="equip">장착</button>` : ''}
       ${isUsable ? `<button class="popup-btn popup-use" data-action="use">사용</button>` : ''}
-      ${!isSafe ? `<button class="popup-btn popup-safe" data-action="safe">안전</button>` : ''}
+      ${!isSafe ? `<button class="popup-btn popup-safe" data-action="safe">안전</button>`
+            : `<button class="popup-btn popup-retrieve" data-action="retrieve">회수</button>`}
       <button class="popup-btn popup-drop" data-action="drop">버리기</button>
       <button class="popup-btn popup-cancel" data-action="cancel">닫기</button>
     </div>
   `;
 
+    // Ensure layout is calculated before showing
+    popup.style.visibility = 'hidden';
     document.body.appendChild(popup);
+
+    requestAnimationFrame(() => {
+        if (document.body.contains(popup)) {
+            popup.style.visibility = 'visible';
+        }
+    });
 
     // Close on click outside
     const closeHandler = (e) => {
@@ -212,7 +221,14 @@ function handleItemAction(action, slotIndex, isSafe, item) {
             break;
         }
         case 'safe':
-            moveToSafeBag(slotIndex);
+            if (!moveToSafeBag(slotIndex)) {
+                // Full
+            }
+            break;
+        case 'retrieve':
+            if (!retrieveFromSafeBag(slotIndex)) {
+                // Full
+            }
             break;
         case 'drop':
             removeItem(slotIndex, isSafe);
