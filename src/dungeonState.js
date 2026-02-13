@@ -15,15 +15,15 @@ export function initDungeonState(tiles, mapData, wanderer) {
         tiles,
         mapData,
         wanderer: { ...wanderer },
-        sideLength: 5 + mapData.mapLv,
+        sideLength: SETTINGS.baseMapSize + mapData.mapLv,
         wave: 1,
         turn: 0,
         playerPosition: 0,
         phase: 'spawn', // spawn | move | action
         currentHp: wanderer.hp,
         maxHp: wanderer.hp,
-        sanity: 100,
-        maxSanity: 100,
+        sanity: SETTINGS.initialSanity,
+        maxSanity: SETTINGS.maxSanity,
         logCallback: null,
         updateCallback: null,
     };
@@ -150,13 +150,13 @@ export function executeSpawnPhase() {
  * Returns { roll, steps, stoppedAtStart, finalTile }
  */
 export function executeMovePhase() {
-    const roll = rollDice(1, 6);
+    const roll = rollDice(1, SETTINGS.moveDiceSides);
     ds.turn++;
 
-    // Sanity drops by 2 on each move
-    ds.sanity = Math.max(0, ds.sanity - 2);
+    // Sanity drops by cost per move
+    ds.sanity = Math.max(0, ds.sanity - SETTINGS.sanityCostPerMove);
 
-    log(`🎲 이동 주사위: ${roll}  (정신력 -2)`);
+    log(`🎲 이동 주사위: ${roll}  (정신력 -${SETTINGS.sanityCostPerMove})`);
 
     const totalTiles = ds.tiles.length;
     let stepsRemaining = roll;

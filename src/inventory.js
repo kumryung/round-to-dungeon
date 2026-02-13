@@ -2,6 +2,7 @@
 // 12 general slots + 2 safe bag slots, equipped weapon, weight
 
 import { getWeapon, WEAPONS } from './data/weapons.js';
+import { SETTINGS } from './data/settings.js';
 
 /** @type {object} */
 let inv = null;
@@ -20,10 +21,10 @@ export function initInventory(wanderer) {
     }
 
     inv = {
-        slots: new Array(12).fill(null),      // General: 12 slots
-        safeBag: new Array(2).fill(null),      // Safe bag: 2 slots
+        slots: new Array(SETTINGS.inventorySlots).fill(null),      // General slots
+        safeBag: new Array(SETTINGS.safeBagSlots).fill(null),      // Safe bag slots
         equipped,                               // Weapon slot
-        maxWeight,
+        maxWeight: SETTINGS.maxWeight,
     };
 
     return inv;

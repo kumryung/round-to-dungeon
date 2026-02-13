@@ -9,4 +9,17 @@ export const SETTINGS = {
         body: 80,
         legs: 60
     },
+
+    // Inventory
+    inventorySlots: 12,
+    safeBagSlots: 2,
+    maxWeight: 100,
+
+    // Stats
+    maxSanity: 100,
+    initialSanity: 100,
+
+    // Map
+    baseMapSize: 5,
+    moveDiceSides: 6,
 };
