@@ -1,0 +1,53 @@
+// ─── Map Data ───
+// Source: DATASET.md §5
+
+export const MAPS = [
+    {
+        id: 'map_01',
+        name: '고블린 숲',
+        nameEn: 'Goblin Forest',
+        icon: '🌲',
+        unlockTownLv: 1,
+        mapLv: 1,
+        tiles: 24,
+        dice: { monster: [1, 3], treasure: [2, 4], event: [1, 2] },
+        monsterPool: ['m_goblin', 'm_bat', 'm_slime'],
+        desc: '울창한 숲 속에 고블린과 박쥐가 횡행하는 초보 모험가의 시험장.',
+    },
+    {
+        id: 'map_02',
+        name: '버려진 광산',
+        nameEn: 'Abandoned Mine',
+        icon: '⛏️',
+        unlockTownLv: 2,
+        mapLv: 2,
+        tiles: 28,
+        dice: { monster: [2, 4], treasure: [2, 3], event: [1, 3] },
+        monsterPool: ['m_orc', 'm_skeleton', 'm_goblin_king'],
+        desc: '어둠이 짙게 내려앉은 폐광. 오크와 해골 전사가 방황한다.',
+    },
+    {
+        id: 'map_03',
+        name: '유령의 늪',
+        nameEn: 'Ghost Swamp',
+        icon: '👻',
+        unlockTownLv: 3,
+        mapLv: 3,
+        tiles: 32,
+        dice: { monster: [2, 5], treasure: [1, 3], event: [2, 4] },
+        monsterPool: ['m_ghost', 'm_poison_slime', 'm_mimic'],
+        desc: '안개에 둘러싸인 늪지대. 유령과 독슬라임이 도사린다.',
+    },
+    {
+        id: 'map_04',
+        name: '암흑 성채',
+        nameEn: 'Dark Citadel',
+        icon: '🏰',
+        unlockTownLv: 5,
+        mapLv: 5,
+        tiles: 40,
+        dice: { monster: [3, 6], treasure: [1, 2], event: [1, 3] },
+        monsterPool: ['m_dark_knight', 'm_balrog', 'm_demon'],
+        desc: '절대 악의 잔재가 깃든 성채. 살아서 돌아오는 자는 드물다.',
+    },
+];
