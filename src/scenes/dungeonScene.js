@@ -116,7 +116,7 @@ export function mount(container, params = {}) {
 
   // Render the board
   const boardContainer = document.getElementById('boardContainer');
-  renderBoard(tiles, sideLength, boardContainer);
+  renderBoard(tiles, sideLength, boardContainer, map?.theme);
   boardRendered = true;
 
   // Set player portrait & initial position
@@ -369,7 +369,7 @@ async function handleRollMove() {
 
   // Event tile: roll random event
   if (interaction.type === 'event') {
-    const evt = rollEvent();
+    const evt = rollEvent(ds.mapData?.eventPool);
     addLog(`${evt.emoji} ${evt.name}: ${evt.desc}`);
 
     if (evt.effect === 'heal') {
@@ -499,9 +499,10 @@ function renderHUD(ds) {
       <div class="hud-bar sanity-bar ${sanityState.class}"><div class="hud-bar-fill" style="width:${sanityPercent}%"></div><span class="hud-bar-text">${ds.sanity}/${ds.maxSanity} (${sanityState.label})</span></div>
     </div>
 
-
-
-    <div class="hud-info-row">
+    ${ds.statusEffects && ds.statusEffects.length > 0 ? `
+    <div class="hud-status-effects">
+      ${ds.statusEffects.map(e => `<span class="status-badge status-${e.type}" title="${e.label || e.type} (${e.duration}턴)">${e.icon || '⚠️'} ${e.duration}</span>`).join('')}
+    </div>` : ''}    <div class="hud-info-row">
       <span class="hud-info-item">📍 Tile ${ds.playerPosition}</span>
       <span class="hud-info-item">🌊 Wave ${ds.wave}</span>
     </div>

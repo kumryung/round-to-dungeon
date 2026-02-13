@@ -1,13 +1,15 @@
 // ─── Map Engine ───
 // Generates rectangular loop map tiles and renders the board as DOM
 
+import { SETTINGS } from './data/settings.js';
+
 /**
  * Generate tile array for a rectangular loop map.
  * @param {object} mapData - Map data from maps.js
  * @returns {Array<object>} tiles
  */
 export function generateTiles(mapData) {
-    const sideLength = 5 + mapData.mapLv;
+    const sideLength = SETTINGS.baseMapSize + mapData.mapLv;
     const g = sideLength + 1; // gridSize
     const totalTiles = sideLength * 4;
     // Corners: top-left(0), top-right(g-1), bottom-right(g + g-2), bottom-left(g + 2*(g-1) - 1)
@@ -74,11 +76,12 @@ export function getTilePosition(index, sideLength) {
 
 /**
  * Render the board into a container element.
+ * @param {string} [theme] - Optional map theme class (e.g. 'forest', 'mine')
  */
-export function renderBoard(tiles, sideLength, container) {
+export function renderBoard(tiles, sideLength, container, theme) {
     const gridSize = sideLength + 1;
     container.innerHTML = '';
-    container.className = 'board-grid';
+    container.className = 'board-grid' + (theme ? ` board-theme-${theme}` : '');
     container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
     container.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
 

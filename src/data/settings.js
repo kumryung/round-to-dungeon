@@ -5,9 +5,9 @@ export const SETTINGS = {
 
     // Combat
     baseHitChance: {
-        head: 40,
-        body: 80,
-        legs: 60
+        head: 50,
+        body: 100,
+        legs: 75
     },
 
     // Inventory
@@ -22,4 +22,11 @@ export const SETTINGS = {
     // Map
     baseMapSize: 5,
     moveDiceSides: 6,
+
+    // Status Effects
+    poisonDamagePerTurn: 3,
+    poisonDuration: 5,
+    burnSanityPerTurn: 2,
+    burnDuration: 3,
+    torchDuration: 10,
 };

@@ -153,8 +153,13 @@ export const EVENTS = [
 
 /**
  * Roll a random event.
+ * @param {string[]} [eventPool] - Optional array of event IDs to choose from (map-specific)
  */
-export function rollEvent() {
+export function rollEvent(eventPool) {
+    if (eventPool && eventPool.length > 0) {
+        const id = eventPool[Math.floor(Math.random() * eventPool.length)];
+        return EVENTS.find(e => e.id === id) || EVENTS[Math.floor(Math.random() * EVENTS.length)];
+    }
     return EVENTS[Math.floor(Math.random() * EVENTS.length)];
 }
 

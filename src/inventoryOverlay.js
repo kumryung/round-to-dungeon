@@ -3,9 +3,10 @@
 // Refreshes in real-time on any item change.
 
 import { getInventory, useItem, equipFromSlot, removeItem, moveToSafeBag, retrieveFromSafeBag } from './inventory.js';
-import { getDungeonState } from './dungeonState.js';
+import { getDungeonState, removeStatusEffect, applyStatusEffect, clearAllStatusEffects } from './dungeonState.js';
 import { getCombatState } from './combatEngine.js';
 import { gradeColor } from './data/weapons.js';
+import { SETTINGS } from './data/settings.js';
 
 // ─── Public API ───
 
@@ -257,12 +258,29 @@ function applyItemEffect(result, ds) {
         case 'full_restore':
             ds.currentHp = ds.maxHp;
             ds.sanity = ds.maxSanity;
+            clearAllStatusEffects();
             if (combat) {
-                combat.player.hp = combat.player.maxHp;
-                combat.player.sanity = combat.player.traits?.includes('madness') ? 0 : 100; // Again sync
                 combat.player.hp = ds.maxHp;
                 combat.player.sanity = ds.sanity;
             }
+            break;
+        case 'cure_poison':
+            removeStatusEffect('poison');
+            break;
+        case 'cure_fracture':
+            removeStatusEffect('fracture');
+            // Restore agi if it was lowered
+            if (combat) {
+                combat.player.agi = ds.wanderer.agi || combat.player.agi;
+            }
+            break;
+        case 'torch':
+            applyStatusEffect({
+                type: 'torch_buff',
+                duration: SETTINGS.torchDuration,
+                icon: '🔦',
+                label: '횃불',
+            });
             break;
     }
 

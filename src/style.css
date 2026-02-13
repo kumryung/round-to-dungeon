@@ -2465,3 +2465,123 @@ button {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-glow);
 }
+
+/* ─── Status Effect Badges ─── */
+
+.hud-status-effects {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(42, 42, 74, 0.6);
+  border: 1px solid var(--border);
+  animation: status-pulse 2s infinite;
+}
+
+.status-badge.status-poison {
+  color: #6deba0;
+  border-color: rgba(109, 235, 160, 0.5);
+  background: rgba(109, 235, 160, 0.1);
+}
+
+.status-badge.status-burn {
+  color: #ff8c42;
+  border-color: rgba(255, 140, 66, 0.5);
+  background: rgba(255, 140, 66, 0.1);
+}
+
+.status-badge.status-torch_buff {
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.status-badge.status-fracture {
+  color: #c9a0dc;
+  border-color: rgba(201, 160, 220, 0.5);
+  background: rgba(201, 160, 220, 0.1);
+}
+
+@keyframes status-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ─── Map Themes ─── */
+
+/* Forest (고블린 숲) */
+.board-theme-forest .tile {
+  background: rgba(34, 85, 34, 0.25);
+  border-color: rgba(76, 153, 76, 0.4);
+}
+
+.board-theme-forest .tile-start {
+  background: rgba(34, 120, 34, 0.4);
+  border-color: rgba(76, 200, 76, 0.6);
+}
+
+.board-theme-forest .tile-current {
+  box-shadow: 0 0 8px rgba(76, 200, 76, 0.6);
+}
+
+/* Mine (버려진 광산) */
+.board-theme-mine .tile {
+  background: rgba(100, 70, 30, 0.25);
+  border-color: rgba(160, 120, 60, 0.4);
+}
+
+.board-theme-mine .tile-start {
+  background: rgba(120, 85, 40, 0.4);
+  border-color: rgba(200, 160, 80, 0.6);
+}
+
+.board-theme-mine .tile-current {
+  box-shadow: 0 0 8px rgba(200, 160, 80, 0.6);
+}
+
+/* Swamp (유령의 늪) */
+.board-theme-swamp .tile {
+  background: rgba(80, 40, 100, 0.25);
+  border-color: rgba(140, 80, 180, 0.4);
+}
+
+.board-theme-swamp .tile-start {
+  background: rgba(100, 50, 130, 0.4);
+  border-color: rgba(180, 100, 220, 0.6);
+}
+
+.board-theme-swamp .tile-current {
+  box-shadow: 0 0 8px rgba(180, 100, 220, 0.6);
+}
+
+/* Citadel (암흑 성채) */
+.board-theme-citadel .tile {
+  background: rgba(100, 20, 20, 0.25);
+  border-color: rgba(180, 40, 40, 0.4);
+}
+
+.board-theme-citadel .tile-start {
+  background: rgba(130, 30, 30, 0.4);
+  border-color: rgba(220, 60, 60, 0.6);
+}
+
+.board-theme-citadel .tile-current {
+  box-shadow: 0 0 8px rgba(220, 60, 60, 0.6);
+}

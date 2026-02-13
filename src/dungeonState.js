@@ -24,6 +24,7 @@ export function initDungeonState(tiles, mapData, wanderer) {
         maxHp: wanderer.hp,
         sanity: SETTINGS.initialSanity,
         maxSanity: SETTINGS.maxSanity,
+        statusEffects: [],  // { type, duration, icon, label }
         logCallback: null,
         updateCallback: null,
     };
@@ -48,6 +49,90 @@ function log(msg) {
 
 function triggerUpdate() {
     if (ds.updateCallback) ds.updateCallback(ds);
+}
+
+// ─── Status Effects ───
+
+/**
+ * Apply a status effect to the player.
+ * @param {{ type: string, duration: number, icon?: string, label?: string }} effect
+ */
+export function applyStatusEffect(effect) {
+    // Remove duplicate if exists
+    ds.statusEffects = ds.statusEffects.filter(e => e.type !== effect.type);
+    ds.statusEffects.push({ ...effect });
+    log(`⚠️ 상태이상: ${effect.icon || ''} ${effect.label || effect.type} (${effect.duration}턴)`);
+    triggerUpdate();
+}
+
+/**
+ * Remove a status effect by type.
+ */
+export function removeStatusEffect(type) {
+    const idx = ds.statusEffects.findIndex(e => e.type === type);
+    if (idx !== -1) {
+        const removed = ds.statusEffects.splice(idx, 1)[0];
+        log(`✅ 상태이상 해제: ${removed.icon || ''} ${removed.label || removed.type}`);
+        triggerUpdate();
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Check if player has a specific status effect.
+ */
+export function hasStatusEffect(type) {
+    return ds.statusEffects.some(e => e.type === type);
+}
+
+/**
+ * Clear all status effects.
+ */
+export function clearAllStatusEffects() {
+    if (ds.statusEffects.length > 0) {
+        ds.statusEffects = [];
+        log(`✨ 모든 상태이상이 해제되었습니다!`);
+        triggerUpdate();
+    }
+}
+
+/**
+ * Tick all status effects (called once per move phase).
+ * Applies DoT damage and decrements duration.
+ */
+export function tickStatusEffects() {
+    const expired = [];
+
+    for (const effect of ds.statusEffects) {
+        switch (effect.type) {
+            case 'poison':
+                ds.currentHp = Math.max(0, ds.currentHp - SETTINGS.poisonDamagePerTurn);
+                log(`🟢 중독! HP -${SETTINGS.poisonDamagePerTurn}`);
+                break;
+            case 'burn':
+                ds.sanity = Math.max(0, ds.sanity - SETTINGS.burnSanityPerTurn);
+                log(`🔥 화상! 정신력 -${SETTINGS.burnSanityPerTurn}`);
+                break;
+            // torch_buff: handled in executeMovePhase (prevents sanity loss)
+        }
+
+        effect.duration--;
+        if (effect.duration <= 0) {
+            expired.push(effect.type);
+        }
+    }
+
+    // Remove expired effects
+    for (const type of expired) {
+        const effect = ds.statusEffects.find(e => e.type === type);
+        ds.statusEffects = ds.statusEffects.filter(e => e.type !== type);
+        if (effect) {
+            log(`⏰ ${effect.icon || ''} ${effect.label || type} 효과가 사라졌습니다.`);
+        }
+    }
+
+    triggerUpdate();
 }
 
 // ─── Dice ───
@@ -153,10 +238,16 @@ export function executeMovePhase() {
     const roll = rollDice(1, SETTINGS.moveDiceSides);
     ds.turn++;
 
-    // Sanity drops by cost per move
-    ds.sanity = Math.max(0, ds.sanity - SETTINGS.sanityCostPerMove);
+    // Sanity drops by cost per move (unless torch buff active)
+    if (!hasStatusEffect('torch_buff')) {
+        ds.sanity = Math.max(0, ds.sanity - SETTINGS.sanityCostPerMove);
+        log(`🎲 이동 주사위: ${roll}  (정신력 -${SETTINGS.sanityCostPerMove})`);
+    } else {
+        log(`🎲 이동 주사위: ${roll}  (🔦 횃불 효과로 정신력 유지)`);
+    }
 
-    log(`🎲 이동 주사위: ${roll}  (정신력 -${SETTINGS.sanityCostPerMove})`);
+    // Tick status effects each move
+    tickStatusEffects();
 
     const totalTiles = ds.tiles.length;
     let stepsRemaining = roll;

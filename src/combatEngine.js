@@ -1,7 +1,8 @@
 // ─── Combat Engine ───
 // Handles turn-based combat logic: initiative, hit/damage, flee, monster AI
 
-import { getDungeonState, getSanityStatus } from './dungeonState.js';
+import { getDungeonState, getSanityStatus, applyStatusEffect } from './dungeonState.js';
+import { SETTINGS } from './data/settings.js';
 import { getInventory, getWeaponDamage, degradeWeapon } from './inventory.js';
 
 // ─── Constants ───
@@ -265,10 +266,24 @@ export function monsterAttack() {
 
     combatLog(`💥 ${combat.monster.name} → ${damage} 데미지!`);
 
-    // Demon: Burn (Sanity damage)
+    // Demon: Burn status effect
     if (combat.monster.ability === 'burn') {
-        ds.sanity = Math.max(0, ds.sanity - 2);
-        combatLog(`🔥 악마의 화염으로 정신력이 깎입니다! (-2 Sanity)`);
+        applyStatusEffect({
+            type: 'burn',
+            duration: SETTINGS.burnDuration,
+            icon: '🔥',
+            label: '화상',
+        });
+    }
+
+    // Poison Slime: Poison status effect (30% chance)
+    if (combat.monster.ability === 'poison' && Math.random() < 0.3) {
+        applyStatusEffect({
+            type: 'poison',
+            duration: SETTINGS.poisonDuration,
+            icon: '🟢',
+            label: '중독',
+        });
     }
 
     if (combat.player.hp <= 0) {
