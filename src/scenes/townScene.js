@@ -1,14 +1,14 @@
 // ─── Town Scene (마을씬) ───
 import { changeScene } from '../sceneManager.js';
 import {
-    getState, recruitWanderer, dismissWanderer, selectWanderer, selectMap,
+  getState, recruitWanderer, dismissWanderer, selectWanderer, selectMap,
 } from '../gameState.js';
 import { CHARACTERS } from '../data/characters.js';
 import { MAPS } from '../data/maps.js';
 
 /* ───────── Mount ───────── */
 export function mount(container) {
-    container.innerHTML = `
+  container.innerHTML = `
     <div class="town-scene">
       <!-- Header -->
       <header class="town-header">
@@ -36,32 +36,32 @@ export function mount(container) {
     </div>
   `;
 
-    // Tab switching
-    container.querySelectorAll('.town-tab').forEach((tab) => {
-        tab.addEventListener('click', () => {
-            container.querySelectorAll('.town-tab').forEach((t) => t.classList.remove('active'));
-            tab.classList.add('active');
-            renderTab(tab.dataset.tab);
-        });
+  // Tab switching
+  container.querySelectorAll('.town-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      container.querySelectorAll('.town-tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      renderTab(tab.dataset.tab);
     });
+  });
 
-    renderTab('castle');
-    renderFooter();
+  renderTab('castle');
+  renderFooter();
 }
 
 export function unmount() { }
 
 /* ───────── Tab renderers ───────── */
 function renderTab(tabName) {
-    const content = document.getElementById('townContent');
-    if (tabName === 'castle') renderCastle(content);
-    else if (tabName === 'guild') renderGuild(content);
-    else if (tabName === 'dungeon') renderDungeon(content);
+  const content = document.getElementById('townContent');
+  if (tabName === 'castle') renderCastle(content);
+  else if (tabName === 'guild') renderGuild(content);
+  else if (tabName === 'dungeon') renderDungeon(content);
 }
 
 /* ─── Castle ─── */
 function renderCastle(el) {
-    el.innerHTML = `
+  el.innerHTML = `
     <div class="tab-panel castle-panel fade-in">
       <div class="castle-banner">
         <div class="castle-icon">🏰</div>
@@ -84,19 +84,21 @@ function renderCastle(el) {
 
 /* ─── Guild ─── */
 function renderGuild(el) {
-    const state = getState();
-    const recruitedIds = state.recruitedWanderers.map((w) => w.id);
+  const state = getState();
+  const recruitedIds = state.recruitedWanderers.map((w) => w.id);
 
-    el.innerHTML = `
+  el.innerHTML = `
     <div class="tab-panel guild-panel fade-in">
       <div class="guild-header">
         <h2>⚔️ 길드 — 방랑자 영입</h2>
         <p class="guild-desc">던전에 함께 할 방랑자를 선택하세요.</p>
       </div>
       <div class="char-grid">
-        ${CHARACTERS.map((ch) => {
-        const recruited = recruitedIds.includes(ch.id);
-        return `
+         ${CHARACTERS.map((ch) => {
+    const recruited = recruitedIds.includes(ch.id);
+    const wanderer = recruited ? state.recruitedWanderers.find(w => w.id === ch.id) : ch;
+    const traits = wanderer?.traits || [];
+    return `
             <div class="char-card ${recruited ? 'recruited' : ''}" data-id="${ch.id}">
               <div class="char-portrait">${ch.portrait}</div>
               <div class="char-info">
@@ -109,9 +111,12 @@ function renderGuild(el) {
                   <span>SPD ${ch.spd}</span>
                 </div>
                 <div class="char-traits">
-                  ${ch.traits.map((t) =>
-            `<span class="trait-badge ${t.type}">${t.name}</span>`
-        ).join('')}
+                  ${traits.length > 0
+        ? traits.map((t) =>
+          `<span class="trait-badge ${t.type}" title="${t.desc}">${t.icon || ''} ${t.name}</span>`
+        ).join('')
+        : '<span class="trait-badge unknown">❓ 영입 시 특성 부여</span>'
+      }
                 </div>
                 <p class="char-desc">${ch.desc}</p>
               </div>
@@ -120,31 +125,31 @@ function renderGuild(el) {
               </button>
             </div>
           `;
-    }).join('')}
+  }).join('')}
       </div>
     </div>
   `;
 
-    el.querySelectorAll('.btn-recruit').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const id = btn.dataset.id;
-            const ch = CHARACTERS.find((c) => c.id === id);
-            if (recruitedIds.includes(id)) {
-                dismissWanderer(id);
-            } else {
-                recruitWanderer(ch);
-            }
-            renderGuild(el);
-            renderFooter();
-        });
+  el.querySelectorAll('.btn-recruit').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const ch = CHARACTERS.find((c) => c.id === id);
+      if (recruitedIds.includes(id)) {
+        dismissWanderer(id);
+      } else {
+        recruitWanderer(ch);
+      }
+      renderGuild(el);
+      renderFooter();
     });
+  });
 }
 
 /* ─── Dungeon ─── */
 function renderDungeon(el) {
-    const state = getState();
+  const state = getState();
 
-    el.innerHTML = `
+  el.innerHTML = `
     <div class="tab-panel dungeon-panel fade-in">
       <div class="dungeon-header">
         <h2>🗺️ 던전 선택</h2>
@@ -168,9 +173,9 @@ function renderDungeon(el) {
         <!-- Dungeon detail -->
         <div class="dungeon-detail" id="dungeonDetail">
           ${state.selectedMap
-            ? renderDungeonInfo(state.selectedMap)
-            : '<p class="placeholder-text">← 던전을 선택하세요</p>'
-        }
+      ? renderDungeonInfo(state.selectedMap)
+      : '<p class="placeholder-text">← 던전을 선택하세요</p>'
+    }
         </div>
       </div>
 
@@ -179,44 +184,44 @@ function renderDungeon(el) {
 
       <!-- Enter dungeon -->
       ${state.selectedMap && state.selectedWanderer
-            ? `<button class="btn-enter-dungeon" id="btnEnterDungeon">⚔️ 던전 진입</button>`
-            : ''
-        }
+      ? `<button class="btn-enter-dungeon" id="btnEnterDungeon">⚔️ 던전 진입</button>`
+      : ''
+    }
     </div>
   `;
 
-    // Dungeon card click
-    el.querySelectorAll('.dungeon-card').forEach((card) => {
-        card.addEventListener('click', () => {
-            const map = MAPS.find((m) => m.id === card.dataset.map);
-            selectMap(map);
-            renderDungeon(el);
-        });
+  // Dungeon card click
+  el.querySelectorAll('.dungeon-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const map = MAPS.find((m) => m.id === card.dataset.map);
+      selectMap(map);
+      renderDungeon(el);
     });
+  });
 
-    // Wanderer select
-    el.querySelectorAll('.wanderer-option').forEach((opt) => {
-        opt.addEventListener('click', () => {
-            const w = state.recruitedWanderers.find((c) => c.id === opt.dataset.id);
-            selectWanderer(w);
-            renderDungeon(el);
-        });
+  // Wanderer select
+  el.querySelectorAll('.wanderer-option').forEach((opt) => {
+    opt.addEventListener('click', () => {
+      const w = state.recruitedWanderers.find((c) => c.id === opt.dataset.id);
+      selectWanderer(w);
+      renderDungeon(el);
     });
+  });
 
-    // Enter dungeon
-    const enterBtn = el.querySelector('#btnEnterDungeon');
-    if (enterBtn) {
-        enterBtn.addEventListener('click', () => {
-            changeScene('dungeon', {
-                map: state.selectedMap,
-                wanderer: state.selectedWanderer,
-            });
-        });
-    }
+  // Enter dungeon
+  const enterBtn = el.querySelector('#btnEnterDungeon');
+  if (enterBtn) {
+    enterBtn.addEventListener('click', () => {
+      changeScene('dungeon', {
+        map: state.selectedMap,
+        wanderer: state.selectedWanderer,
+      });
+    });
+  }
 }
 
 function renderDungeonInfo(map) {
-    return `
+  return `
     <div class="dungeon-info-card fade-in">
       <div class="dungeon-info-header">
         <span class="dungeon-info-icon">${map.icon}</span>
@@ -240,10 +245,10 @@ function renderDungeonInfo(map) {
 }
 
 function renderWandererSelect(state) {
-    if (state.recruitedWanderers.length === 0) {
-        return `<div class="wanderer-select"><p class="placeholder-text">⚠️ 먼저 길드에서 방랑자를 영입하세요.</p></div>`;
-    }
-    return `
+  if (state.recruitedWanderers.length === 0) {
+    return `<div class="wanderer-select"><p class="placeholder-text">⚠️ 먼저 길드에서 방랑자를 영입하세요.</p></div>`;
+  }
+  return `
     <div class="wanderer-select fade-in">
       <h3>🧑 출전 방랑자 선택</h3>
       <div class="wanderer-options">
@@ -261,14 +266,14 @@ function renderWandererSelect(state) {
 
 /* ─── Footer (recruited wanderers bar) ─── */
 function renderFooter() {
-    const el = document.getElementById('footerWanderers');
-    if (!el) return;
-    const state = getState();
-    if (state.recruitedWanderers.length === 0) {
-        el.innerHTML = '<span class="footer-empty">아직 영입한 방랑자가 없습니다.</span>';
-        return;
-    }
-    el.innerHTML = state.recruitedWanderers.map((w) => `
+  const el = document.getElementById('footerWanderers');
+  if (!el) return;
+  const state = getState();
+  if (state.recruitedWanderers.length === 0) {
+    el.innerHTML = '<span class="footer-empty">아직 영입한 방랑자가 없습니다.</span>';
+    return;
+  }
+  el.innerHTML = state.recruitedWanderers.map((w) => `
     <div class="footer-char">
       <span class="footer-char-portrait">${w.portrait}</span>
       <span class="footer-char-name">${w.name}</span>

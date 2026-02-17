@@ -2585,3 +2585,202 @@ button {
 .board-theme-citadel .tile-current {
   box-shadow: 0 0 8px rgba(220, 60, 60, 0.6);
 }
+
+/* ─── EXP & Level Up ─── */
+.exp-bar {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 0, 0.2);
+}
+
+.exp-bar .hud-bar-fill {
+  background: linear-gradient(90deg, #f1c40f, #f39c12);
+  box-shadow: 0 0 8px rgba(241, 196, 15, 0.4);
+}
+
+.btn-levelup-trigger {
+  background: #f1c40f;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-left: 8px;
+  box-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
+  transition: all 0.2s;
+}
+
+.pulse {
+  animation: pulse-animation 2s infinite;
+}
+
+@keyframes pulse-animation {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.7);
+  }
+
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(241, 196, 15, 0);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(241, 196, 15, 0);
+  }
+}
+
+/* Level Up Overlay */
+.levelup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  backdrop-filter: blur(5px);
+}
+
+.levelup-modal {
+  background: #1a1a1a;
+  border: 2px solid #f1c40f;
+  border-radius: 12px;
+  width: 310px;
+  padding: 24px;
+  color: #fff;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.levelup-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.levelup-header h2 {
+  margin: 0;
+  color: #f1c40f;
+  font-size: 24px;
+}
+
+.levelup-info {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.levelup-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.levelup-stat-row {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.levelup-stat-icon {
+  font-size: 18px;
+  margin-right: 12px;
+}
+
+.levelup-stat-label {
+  flex: 1;
+  font-weight: bold;
+  color: #ccc;
+  font-size: 14px;
+}
+
+.levelup-stat-value {
+  font-size: 16px;
+  font-weight: bold;
+  margin-right: 12px;
+  min-width: 30px;
+  text-align: right;
+}
+
+.btn-stat-up {
+  background: #f1c40f;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-stat-up:hover:not(:disabled) {
+  transform: scale(1.1);
+  background: #f39c12;
+}
+
+.btn-stat-up:disabled {
+  background: #444;
+  color: #888;
+  cursor: not-allowed;
+}
+
+.levelup-footer {
+  text-align: center;
+}
+
+.btn-levelup-close {
+  background: #fff;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 40px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-levelup-close:hover {
+  background: #f1c40f;
+}
+
+/* ─── Fog of War ─── */
+.tile {
+  transition: filter 0.5s ease, opacity 0.5s ease;
+}
+
+/* Shroud: Unvisited, unseen */
+.tile[data-visibility="shroud"] {
+  background: #000 !important;
+  border-color: #111 !important;
+  box-shadow: none !important;
+  pointer-events: none;
+}
+.tile[data-visibility="shroud"] .tile-content,
+.tile[data-visibility="shroud"] .tile-overlay {
+  opacity: 0;
+}
+
+/* Fog: Visited but not currently visible */
+.tile[data-visibility="fog"] {
+  filter: grayscale(80%) brightness(40%);
+}
+.tile[data-visibility="fog"] .tile-overlay {
+  opacity: 0.5; /* Hide detailed objects partly */
+}
+
+/* Visible: Currently in view */
+.tile[data-visibility="visible"] {
+  filter: none;
+  opacity: 1;
+}

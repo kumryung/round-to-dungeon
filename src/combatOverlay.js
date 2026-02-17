@@ -254,9 +254,18 @@ async function handleResult(callbacks) {
         delete window.__refreshCombatUI;
     }
 
-    if (combat.result === 'victory' && callbacks.onVictory) callbacks.onVictory();
-    else if (combat.result === 'defeat' && callbacks.onDefeat) callbacks.onDefeat();
-    else if (combat.result === 'fled' && callbacks.onFlee) callbacks.onFlee();
+    if (combat.result === 'victory') {
+        const ds = getDungeonState();
+        const expGained = Math.round(SETTINGS.expBase * combat.monster.lv * SETTINGS.expPerLevel);
+        grantExp(expGained);
+        combatLog(`✨ 경험치 +${expGained} 획득!`);
+
+        if (callbacks.onVictory) callbacks.onVictory();
+    } else if (combat.result === 'defeat' && callbacks.onDefeat) {
+        if (callbacks.onDefeat) callbacks.onDefeat();
+    } else if (combat.result === 'fled' && callbacks.onFlee) {
+        if (callbacks.onFlee) callbacks.onFlee();
+    }
 }
 
 // ─── UI Updates ───

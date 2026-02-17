@@ -11,8 +11,9 @@ let ds = {};
  * Initialize dungeon state for a new dungeon session.
  */
 export function initDungeonState(tiles, mapData, wanderer) {
+    const maxHp = 50 + (wanderer.vit * 5);
     ds = {
-        tiles,
+        tiles: tiles.map(t => ({ ...t, visited: false, visibility: 'shroud' })),
         mapData,
         wanderer: { ...wanderer },
         sideLength: SETTINGS.baseMapSize + mapData.mapLv,
@@ -20,14 +21,22 @@ export function initDungeonState(tiles, mapData, wanderer) {
         turn: 0,
         playerPosition: 0,
         phase: 'spawn', // spawn | move | action
-        currentHp: wanderer.hp,
-        maxHp: wanderer.hp,
+        currentHp: maxHp,
+        maxHp: maxHp,
         sanity: SETTINGS.initialSanity,
         maxSanity: SETTINGS.maxSanity,
         statusEffects: [],  // { type, duration, icon, label }
+        exp: 0,
+        level: 1,
+        expToNext: SETTINGS.expTable[0],
+        freeStatPoints: 0,
         logCallback: null,
         updateCallback: null,
     };
+
+    // Initial visibility
+    updateVisibility();
+
     return ds;
 }
 
@@ -51,6 +60,62 @@ function triggerUpdate() {
     if (ds.updateCallback) ds.updateCallback(ds);
 }
 
+// ─── EXP / Level ───
+
+/**
+ * Grant EXP to the player. Handles level-up(s) and free stat point allocation.
+ * @param {number} amount EXP gained
+ * @returns {{ gained: number, leveledUp: boolean, newLevel: number }}
+ */
+export function grantExp(amount) {
+    ds.exp += amount;
+    let leveledUp = false;
+
+    while (ds.exp >= ds.expToNext) {
+        ds.exp -= ds.expToNext;
+        ds.level++;
+        ds.freeStatPoints += SETTINGS.freeStatPerLevel;
+
+        // Get next level requirement from table, or use last value if exceeded
+        const tableIdx = ds.level - 1;
+        ds.expToNext = SETTINGS.expTable[tableIdx] || SETTINGS.expTable[SETTINGS.expTable.length - 1];
+
+        leveledUp = true;
+        log(`🎉 레벨 업! Lv.${ds.level} — 프리스탯 +${SETTINGS.freeStatPerLevel}`);
+    }
+
+    triggerUpdate();
+    return { gained: amount, leveledUp, newLevel: ds.level };
+}
+
+/**
+ * Allocate a free stat point to a specific stat.
+ * @param {'hp'|'str'|'agi'|'spd'|'dex'|'luk'} statName
+ * @returns {boolean} success
+ */
+export function allocateStat(statName) {
+    if (ds.freeStatPoints <= 0) return false;
+
+    const validStats = ['vit', 'str', 'agi', 'spd', 'dex', 'luk'];
+    if (!validStats.includes(statName)) return false;
+
+    ds.freeStatPoints--;
+
+    if (statName === 'vit') {
+        ds.wanderer.vit = (ds.wanderer.vit || 0) + 1;
+        const hpGain = 5; // 1 VIT = 5 HP
+        ds.maxHp += hpGain;
+        ds.currentHp += hpGain;
+        log(`💪 VIT +1 (HP +${hpGain}, 현재 ${ds.maxHp})`);
+    } else {
+        ds.wanderer[statName] = (ds.wanderer[statName] || 0) + 1;
+        log(`💪 ${statName.toUpperCase()} +1 (현재 ${ds.wanderer[statName]})`);
+    }
+
+    triggerUpdate();
+    return true;
+}
+
 // ─── Status Effects ───
 
 /**
@@ -60,8 +125,13 @@ function triggerUpdate() {
 export function applyStatusEffect(effect) {
     // Remove duplicate if exists
     ds.statusEffects = ds.statusEffects.filter(e => e.type !== effect.type);
-    ds.statusEffects.push({ ...effect });
-    log(`⚠️ 상태이상: ${effect.icon || ''} ${effect.label || effect.type} (${effect.duration}턴)`);
+    ds.statusEffects.push(effect);
+    log(`✨ 상태이상: ${effect.label || effect.type} (${effect.duration}턴)`);
+
+    if (effect.type === 'torch_buff') {
+        updateVisibility(); // Immediate view range update
+    }
+
     triggerUpdate();
 }
 
@@ -74,6 +144,7 @@ export function removeStatusEffect(type) {
         const removed = ds.statusEffects.splice(idx, 1)[0];
         log(`✅ 상태이상 해제: ${removed.icon || ''} ${removed.label || removed.type}`);
         triggerUpdate();
+        updateVisibility(); // Re-calculate visibility if torch buff is applied/removed
         return true;
     }
     return false;
@@ -94,6 +165,7 @@ export function clearAllStatusEffects() {
         ds.statusEffects = [];
         log(`✨ 모든 상태이상이 해제되었습니다!`);
         triggerUpdate();
+        updateVisibility(); // Re-calculate visibility if torch buff was cleared
     }
 }
 
@@ -103,6 +175,7 @@ export function clearAllStatusEffects() {
  */
 export function tickStatusEffects() {
     const expired = [];
+    let visibilityMightChange = false;
 
     for (const effect of ds.statusEffects) {
         switch (effect.type) {
@@ -120,6 +193,9 @@ export function tickStatusEffects() {
         effect.duration--;
         if (effect.duration <= 0) {
             expired.push(effect.type);
+            if (effect.type === 'torch_buff') {
+                visibilityMightChange = true;
+            }
         }
     }
 
@@ -130,6 +206,36 @@ export function tickStatusEffects() {
         if (effect) {
             log(`⏰ ${effect.icon || ''} ${effect.label || type} 효과가 사라졌습니다.`);
         }
+    }
+
+    triggerUpdate();
+    if (visibilityMightChange) {
+        updateVisibility(); // Re-calculate visibility if torch buff expired
+    }
+}
+
+// ─── Visibility (Fog of War) ───
+
+export function updateVisibility() {
+    const { playerPosition, tiles, sideLength } = ds;
+    const hasTorch = hasStatusEffect('torch_buff');
+    const viewRange = SETTINGS.baseViewDistance + (hasTorch ? SETTINGS.torchViewBonus : 0);
+
+    // Calculate visible range based on map loop logic
+    const totalTiles = tiles.length;
+
+    // Reset visible to fog for previously visible tiles
+    tiles.forEach(t => {
+        if (t.visibility === 'visible') t.visibility = 'fog';
+    });
+
+    // Mark current range as visible
+    for (let i = -viewRange; i <= viewRange; i++) {
+        let idx = (playerPosition + i) % totalTiles;
+        if (idx < 0) idx += totalTiles;
+
+        tiles[idx].visibility = 'visible';
+        tiles[idx].visited = true;
     }
 
     triggerUpdate();

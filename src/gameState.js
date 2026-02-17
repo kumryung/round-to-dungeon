@@ -1,4 +1,5 @@
 // ─── Global Game State ───
+import { rollRandomTraits } from './data/characters.js';
 
 const state = {
     /** @type {Array<object>} 영입한 방랑자 목록 */
@@ -17,7 +18,7 @@ export function getState() {
 
 export function recruitWanderer(character) {
     if (!state.recruitedWanderers.find((w) => w.id === character.id)) {
-        state.recruitedWanderers.push({ ...character });
+        state.recruitedWanderers.push({ ...character, traits: rollRandomTraits() });
     }
 }
 

@@ -122,6 +122,10 @@ function createTileElement(tile) {
     el.className = `tile tile-${tile.type}`;
     el.dataset.index = tile.index;
     el.id = `tile-${tile.index}`;
+    // Fog of War visibility
+    if (tile.visibility) {
+        el.dataset.visibility = tile.visibility;
+    }
 
     // Index label
     const indexLabel = document.createElement('span');
@@ -207,4 +211,17 @@ export function movePlayerToken(index, sideLength, animate = true) {
 export function setPlayerPortrait(portrait) {
     const token = document.getElementById('playerToken');
     if (token) token.textContent = portrait;
+}
+
+/**
+ * Update the visibility state of all tiles on the board.
+ * @param {Array<object>} tiles - The updated tiles array from dungeonState
+ */
+export function updateBoardVisibility(tiles) {
+    tiles.forEach(tile => {
+        const el = document.getElementById(`tile-${tile.index}`);
+        if (el) {
+            el.dataset.visibility = tile.visibility;
+        }
+    });
 }
