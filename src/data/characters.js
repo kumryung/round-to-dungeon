@@ -93,15 +93,56 @@ export function rollRandomTraits() {
 
 export { POSITIVE_TRAITS, NEGATIVE_TRAITS };
 
+/**
+ * Generate a randomized wanderer instance from a base template.
+ * @param {object} baseChar Character template from CHARACTERS
+ * @returns {object} Randomized character instance
+ */
+export function generateWandererInstance(baseChar) {
+    const freeStats = Math.floor(Math.random() * (baseChar.maxFreeStat - baseChar.minFreeStat + 1)) + baseChar.minFreeStat;
+    const instance = JSON.parse(JSON.stringify(baseChar));
+
+    // Define weights based on className
+    let weights = { vit: 1, str: 1, agi: 1, dex: 1, luk: 1, spd: 1 };
+    switch (baseChar.className) {
+        case '워리어': case '경비병': weights = { vit: 3, str: 3, agi: 1, dex: 1, luk: 1, spd: 1 }; break;
+        case '도적': weights = { vit: 1, str: 1, agi: 3, dex: 3, luk: 2, spd: 2 }; break;
+        case '용병': case '듀얼리스트': weights = { vit: 1, str: 2, agi: 3, dex: 1, luk: 1, spd: 3 }; break;
+        case '버서커': weights = { vit: 2, str: 5, agi: 1, dex: 1, luk: 1, spd: 1 }; break;
+        case '아처': weights = { vit: 1, str: 1, agi: 2, dex: 5, luk: 2, spd: 1 }; break;
+        case '탐험가': weights = { vit: 1, str: 1, agi: 1, dex: 1, luk: 6, spd: 1 }; break;
+        case '성전사': weights = { vit: 5, str: 2, agi: 1, dex: 1, luk: 1, spd: 1 }; break;
+        case '어쌔신': weights = { vit: 1, str: 1, agi: 4, dex: 3, luk: 1, spd: 4 }; break;
+    }
+
+    const statKeys = Object.keys(weights);
+    const weightSum = Object.values(weights).reduce((a, b) => a + b, 0);
+
+    for (let i = 0; i < freeStats; i++) {
+        let r = Math.random() * weightSum;
+        let cumulative = 0;
+        for (const key of statKeys) {
+            cumulative += weights[key];
+            if (r <= cumulative) {
+                instance[key]++;
+                break;
+            }
+        }
+    }
+
+    // Pre-roll traits
+    instance.traits = rollRandomTraits();
+    return instance;
+}
+
 export const CHARACTERS = [
     {
         id: 'c_warrior_01',
         name: '아서 (Arthur)',
         className: '워리어',
         classIcon: '⚔️',
-        // hp: 120, // 50 + (14 * 5)
-        vit: 14,
-        str: 10, agi: 3, spd: 2, dex: 5, luk: 5,
+        tier: 1, minFreeStat: 3, maxFreeStat: 6,
+        vit: 14, str: 10, agi: 3, spd: 2, dex: 5, luk: 5,
         startWeapon: 'w_oak_club',
         portrait: '🛡️',
         desc: '전장에서 단련된 전사. 강인한 체력과 힘이 장점이다.',
@@ -111,9 +152,8 @@ export const CHARACTERS = [
         name: '카일 (Kyle)',
         className: '도적',
         classIcon: '🗡️',
-        // hp: 80, // 50 + (6 * 5)
-        vit: 6,
-        str: 3, agi: 10, spd: 5, dex: 8, luk: 7,
+        tier: 1, minFreeStat: 4, maxFreeStat: 7,
+        vit: 6, str: 3, agi: 10, spd: 5, dex: 8, luk: 7,
         startWeapon: 'w_rusty_dagger',
         portrait: '🎭',
         desc: '그림자 속의 사냥꾼. 민첩과 명중이 뛰어나다.',
@@ -123,35 +163,87 @@ export const CHARACTERS = [
         name: '벨라 (Bella)',
         className: '용병',
         classIcon: '⚡',
-        // hp: 100, // 50 + (10 * 5)
-        vit: 10,
-        str: 6, agi: 5, spd: 10, dex: 5, luk: 5,
+        tier: 1, minFreeStat: 4, maxFreeStat: 7,
+        vit: 10, str: 6, agi: 5, spd: 10, dex: 5, luk: 5,
         startWeapon: 'w_rusty_dagger',
         portrait: '💃',
         desc: '번개처럼 빠른 용병. 속도와 선제공격이 특기이다.',
     },
     {
-        id: 'c_warrior_02',
-        name: '헥토르 (Hector)',
-        className: '워리어',
-        classIcon: '⚔️',
-        // hp: 130, // 50 + (16 * 5)
-        vit: 16,
-        str: 12, agi: 2, spd: 1, dex: 4, luk: 4,
+        id: 'c_archer_01',
+        name: '로빈 (Robin)',
+        className: '아처',
+        classIcon: '🏹',
+        tier: 1, minFreeStat: 4, maxFreeStat: 8,
+        vit: 8, str: 4, agi: 7, spd: 4, dex: 12, luk: 5,
         startWeapon: null,
-        portrait: '🏋️',
-        desc: '거대한 체구의 전사. 맨손으로도 싸울 수 있다.',
+        portrait: '🎯',
+        desc: '백발백중의 궁수. 원거리에서 적을 제압한다.',
     },
     {
-        id: 'c_rogue_02',
-        name: '리나 (Lina)',
-        className: '도적',
-        classIcon: '🗡️',
-        // hp: 75, // 50 + (5 * 5)
-        vit: 5,
-        str: 2, agi: 12, spd: 6, dex: 9, luk: 8,
+        id: 'c_explorer_01',
+        name: '인디 (Indy)',
+        className: '탐험가',
+        classIcon: '🧭',
+        tier: 1, minFreeStat: 5, maxFreeStat: 10,
+        vit: 9, str: 5, agi: 6, spd: 4, dex: 5, luk: 15,
         startWeapon: null,
-        portrait: '🌙',
-        desc: '조용한 밤의 암살자. 회피와 행운이 뛰어나다.',
+        portrait: '🤠',
+        desc: '미지의 땅을 누비는 탐험가. 뛰어난 운으로 보물을 잘 찾는다.',
+    },
+    {
+        id: 'c_guard_01',
+        name: '바스찬 (Bastian)',
+        className: '경비병',
+        classIcon: '🛡️',
+        tier: 1, minFreeStat: 3, maxFreeStat: 5,
+        vit: 12, str: 8, agi: 4, spd: 2, dex: 6, luk: 4,
+        startWeapon: 'w_oak_club',
+        portrait: '💂',
+        desc: '마을을 지키던 노련한 경비병. 방어력이 안정적이다.',
+    },
+    {
+        id: 'c_berserker_01',
+        name: '바르가스 (Vargas)',
+        className: '버서커',
+        classIcon: '🪓',
+        tier: 2, minFreeStat: 6, maxFreeStat: 12,
+        vit: 18, str: 15, agi: 2, spd: 1, dex: 3, luk: 3,
+        startWeapon: 'w_oak_club',
+        portrait: '👹',
+        desc: '분노에 휩싸인 광전사. 압도적인 힘으로 적을 부순다.',
+    },
+    {
+        id: 'c_duelist_01',
+        name: '줄리안 (Julian)',
+        className: '듀얼리스트',
+        classIcon: '🤺',
+        tier: 2, minFreeStat: 8, maxFreeStat: 14,
+        vit: 8, str: 7, agi: 14, spd: 12, dex: 8, luk: 6,
+        startWeapon: 'w_rusty_dagger',
+        portrait: '🧥',
+        desc: '화려한 검술의 결투가. 빠른 속도로 전장을 휘젓는다.',
+    },
+    {
+        id: 'c_paladin_01',
+        name: '가브리엘 (Gabriel)',
+        className: '성전사',
+        classIcon: '✨',
+        tier: 3, minFreeStat: 10, maxFreeStat: 20,
+        vit: 25, str: 18, agi: 3, spd: 2, dex: 5, luk: 7,
+        startWeapon: 'w_oak_club',
+        portrait: '👼',
+        desc: '신의 가호를 받는 기사. 죽음을 두려워하지 않는 생존력을 가졌다.',
+    },
+    {
+        id: 'c_assassin_01',
+        name: '쉐도우 (Shadow)',
+        className: '어쌔신',
+        classIcon: '🌑',
+        tier: 3, minFreeStat: 15, maxFreeStat: 25,
+        vit: 7, str: 5, agi: 20, spd: 18, dex: 15, luk: 10,
+        startWeapon: 'w_rusty_dagger',
+        portrait: '🥷',
+        desc: '심연에서 온 암살자. 적이 눈치채기 전에 숨통을 끊는다.',
     },
 ];

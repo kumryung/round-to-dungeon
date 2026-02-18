@@ -10,10 +10,11 @@ import {
 import { getMonster } from '../data/monsters.js';
 import { initCombat } from '../combatEngine.js';
 import { showCombat } from '../combatOverlay.js';
-import { initInventory, getInventory, addItem } from '../inventory.js';
+import { initInventory, getInventory, addItem, removeItem } from '../inventory.js';
 import { buildInlineInventoryHTML, refreshInlineInventory, showItemToast } from '../inventoryOverlay.js';
 import { rollChestLoot, rollEvent, rollMonsterLoot, ITEMS } from '../data/items.js';
 import { openCraftingOverlay } from '../craftingOverlay.js';
+import { sendToMailbox } from '../gameState.js';
 
 
 let boardRendered = false;
@@ -31,8 +32,8 @@ export function mount(container, params = {}) {
   const ds = initDungeonState(tiles, map, wanderer);
 
   container.innerHTML = `
-  < div class="dungeon-scene" >
-      < !--Top bar-- >
+  <div class="dungeon-scene">
+      <!-- Top bar -->
       <div class="dungeon-topbar">
         <button class="btn-return" id="btnReturn">← 마을로 귀환</button>
         <div class="dungeon-topbar-info">
@@ -51,37 +52,37 @@ export function mount(container, params = {}) {
         </div>
       </div>
 
-      <!--3 - column layout-- >
-  <div class="dungeon-body">
-    <!-- Left: Player Info Panel -->
-    <aside class="dungeon-left">
-      <div class="panel hud-panel" id="hudPanel">
-        <h3>👤 플레이어</h3>
-        ${wanderer ? renderHUD(ds) : '<p>정보 없음</p>'}
-      </div>
-    </aside>
+      <!-- 3-column layout -->
+      <div class="dungeon-body">
+        <!-- Left: Player Info Panel -->
+        <aside class="dungeon-left">
+          <div class="panel hud-panel" id="hudPanel">
+            <h3>👤 플레이어</h3>
+            ${wanderer ? renderHUD(ds) : '<p>정보 없음</p>'}
+          </div>
+        </aside>
 
-    <!-- Center: Game Board -->
-    <section class="dungeon-center">
-      <div class="board-container" id="boardContainer"></div>
-    </section>
+        <!-- Center: Game Board -->
+        <section class="dungeon-center">
+          <div class="board-container" id="boardContainer"></div>
+        </section>
 
-    <!-- Right: Log & Action -->
-    <aside class="dungeon-right">
-      <div class="panel log-panel">
-        <h3>📜 로그</h3>
-        <div class="log-content" id="logContent"></div>
-      </div>
-      <div class="panel action-panel" id="actionPanel">
-        <h3>🎯 액션</h3>
-        <div id="actionContent"></div>
-      </div>
-    </aside>
+        <!-- Right: Log & Action -->
+        <aside class="dungeon-right">
+          <div class="panel log-panel">
+            <h3>📜 로그</h3>
+            <div class="log-content" id="logContent"></div>
+          </div>
+          <div class="panel action-panel" id="actionPanel">
+            <h3>🎯 액션</h3>
+            <div id="actionContent"></div>
+          </div>
+        </aside>
 
-    <!-- Center Bottom: Inline inventory panel -->
-    ${buildInlineInventoryHTML()}
+        <!-- Inline inventory panel -->
+        ${buildInlineInventoryHTML()}
+      </div>
   </div>
-    </div >
   `;
 
   // Log callback
@@ -171,11 +172,11 @@ async function startSpawnPhase() {
 
   // Step 1: Roll dice
   const rolls = rollSpawnDice();
-  addLog(`🎲 스폰 주사위  — 몬스터: ${rolls.monsterRoll} | 보물: ${rolls.treasureRoll} | 이벤트: ${rolls.eventRoll} `);
+  addLog(`🎲 스폰 주사위  — 몬스터: ${rolls.monsterRoll} | 보물: ${rolls.treasureRoll} | 이벤트: ${rolls.eventRoll}`);
 
   // Show dice results in action panel
   actionEl.innerHTML = `
-  < div class="spawn-result fade-in" >
+  <div class="spawn-result fade-in">
       <p class="action-label">🎲 스폰 단계</p>
       <div class="dice-results">
         <div class="dice-item dice-roll-anim" style="animation-delay:0s"><span class="dice-icon">💀</span><span class="dice-val">${rolls.monsterRoll}</span><span class="dice-label">몬스터</span></div>
@@ -183,7 +184,7 @@ async function startSpawnPhase() {
         <div class="dice-item dice-roll-anim" style="animation-delay:0.3s"><span class="dice-icon">❓</span><span class="dice-val">${rolls.eventRoll}</span><span class="dice-label">이벤트</span></div>
       </div>
       <div class="spawn-progress" id="spawnProgress"></div>
-    </div >
+  </div>
   `;
 
   // Step 2: Generate placements
@@ -201,14 +202,14 @@ async function startSpawnPhase() {
     commitSpawn(p);
 
     // Tile pop animation
-    const tileEl = document.getElementById(`tile - ${p.tileIndex} `);
+    const tileEl = document.getElementById(`tile-${p.tileIndex}`);
     if (tileEl) {
       tileEl.classList.add('tile-spawn-pop');
       setTimeout(() => tileEl.classList.remove('tile-spawn-pop'), 600);
     }
 
     // Log & progress
-    addLog(`  ↳ ${SPAWN_LABELS[p.type]} → 타일 ${p.tileIndex} `);
+    addLog(`  ↳ ${SPAWN_LABELS[p.type]} → 타일 ${p.tileIndex}`);
     if (progressEl) {
       progressEl.textContent = `배치 중... (${i + 1}/${placements.length})`;
     }
@@ -231,9 +232,9 @@ function showMoveUI() {
   if (!actionEl) return;
 
   actionEl.innerHTML = `
-  < div class="move-phase fade-in" >
+  <div class="move-phase fade-in">
     <button class="btn-action btn-roll-move" id="btnRollMove">🎲 ROLL MOVE</button>
-    </div >
+  </div>
   `;
 
   document.getElementById('btnRollMove').addEventListener('click', handleRollMove);
@@ -287,7 +288,7 @@ async function handleRollMove() {
     const monsterInstance = getMonster(monsterId, monsterLevel);
 
     if (!monsterInstance) {
-      addLog(`⚠️ 알 수 없는 몬스터: ${monsterId} `);
+      addLog(`⚠️ 알 수 없는 몬스터: ${monsterId}`);
       showMoveUI();
       return;
     }
@@ -295,17 +296,17 @@ async function handleRollMove() {
     // Fear monsters: sanity -5
     if (monsterInstance.fear) {
       ds.sanity = Math.max(0, ds.sanity - 5);
-      addLog(`😱 공포! 정신력 - 5(${monsterInstance.name})`);
+      addLog(`😱 공포! 정신력 -5(${monsterInstance.name})`);
       refreshHUD(ds);
     }
 
     const actionEl = document.getElementById('actionContent');
     if (actionEl) {
       actionEl.innerHTML = `
-  < div class="encounter fade-in" >
+  <div class="encounter fade-in">
           <p class="action-label">${monsterInstance.emoji} 전투 중!</p>
           <p class="action-desc">${monsterInstance.name} Lv.${monsterLevel}</p>
-        </div >
+  </div>
   `;
     }
 
@@ -331,7 +332,7 @@ async function handleRollMove() {
               if (logEl) {
                 const entry = document.createElement('p');
                 entry.className = 'log-entry log-new';
-                entry.textContent = `> 💎 획득: ${loot.emoji} ${loot.name} `;
+                entry.textContent = `> 💎 획득: ${loot.emoji} ${loot.name}`;
                 logEl.appendChild(entry);
                 logEl.scrollTop = logEl.scrollHeight;
               }
@@ -348,6 +349,15 @@ async function handleRollMove() {
       },
       onDefeat: () => {
         addLog(`💀 사망...`);
+        // Recover safe bag items
+        const inv = getInventory();
+        if (inv && inv.safeBag) {
+          const recoveredItems = inv.safeBag.filter(i => i !== null);
+          if (recoveredItems.length > 0) {
+            sendToMailbox(recoveredItems, `${ds.wanderer?.name}의 유품 (안전가방)`);
+            addLog(`✉️ 안전가방의 아이템이 우편함으로 발송되었습니다.`);
+          }
+        }
         showGameOver();
       },
       onFlee: () => {
@@ -380,7 +390,7 @@ async function handleRollMove() {
   // Event tile: roll random event
   if (interaction.type === 'event') {
     const evt = rollEvent(ds.mapData?.eventPool);
-    addLog(`${evt.emoji} ${evt.name}: ${evt.desc} `);
+    addLog(`${evt.emoji} ${evt.name}: ${evt.desc}`);
 
     if (evt.effect === 'heal') {
       ds.currentHp = Math.min(ds.maxHp, ds.currentHp + evt.value);
@@ -426,11 +436,11 @@ function showGameOver() {
   const actionEl = document.getElementById('actionContent');
   if (actionEl) {
     actionEl.innerHTML = `
-  < div class="game-over fade-in" >
+  <div class="game-over fade-in">
         <p class="action-label">💀 Game Over</p>
         <p class="action-desc">방랑자가 쓰러졌습니다...</p>
         <button class="btn-action btn-return-town" id="btnGameOverReturn">마을로 돌아가기</button>
-      </div >
+  </div>
   `;
     document.getElementById('btnGameOverReturn').addEventListener('click', () => {
       changeScene('town');
@@ -445,7 +455,7 @@ function addLog(msg) {
   if (!logEl) return;
   const entry = document.createElement('p');
   entry.className = 'log-entry log-new';
-  entry.textContent = `> ${msg} `;
+  entry.textContent = `> ${msg}`;
   logEl.appendChild(entry);
   logEl.scrollTop = logEl.scrollHeight;
 }
@@ -463,8 +473,8 @@ function showDicePopup(value) {
 function refreshTopbar(ds) {
   const waveEl = document.getElementById('topWave');
   const turnEl = document.getElementById('topTurn');
-  if (waveEl) waveEl.textContent = `Wave ${ds.wave} `;
-  if (turnEl) turnEl.textContent = `Turn ${ds.turn} `;
+  if (waveEl) waveEl.textContent = `Wave ${ds.wave}`;
+  if (turnEl) turnEl.textContent = `Turn ${ds.turn}`;
 }
 
 async function showWaveTitle(wave) {
@@ -473,7 +483,7 @@ async function showWaveTitle(wave) {
 
   const overlay = document.createElement('div');
   overlay.className = 'wave-title-overlay';
-  overlay.innerHTML = `< div class="wave-title-text" > WAVE ${wave}</div > `;
+  overlay.innerHTML = `<div class="wave-title-text">WAVE ${wave}</div>`;
   container.appendChild(overlay);
 
   // Wait for animation (Reduced to ~1.3s total)
@@ -484,7 +494,7 @@ async function showWaveTitle(wave) {
 function refreshHUD(ds) {
   const hudEl = document.getElementById('hudPanel');
   if (!hudEl) return;
-  hudEl.innerHTML = `< h3 >👤 플레이어</h3 > ` + renderHUD(ds);
+  hudEl.innerHTML = `<h3>👤 플레이어</h3>` + renderHUD(ds);
 }
 
 function renderHUD(ds) {
@@ -496,7 +506,7 @@ function renderHUD(ds) {
   const sanityState = getSanityStatus(ds.sanity);
 
   return `
-  < div class="hud-portrait" > ${w.portrait}</div >
+  <div class="hud-portrait">${w.portrait}</div>
     <div class="hud-name">${w.name}</div>
     <div class="hud-class">${w.classIcon} ${w.className}</div>
 
@@ -517,7 +527,8 @@ function renderHUD(ds) {
     <div class="hud-status-effects">
       ${ds.statusEffects.map(e => `<span class="status-badge status-${e.type}" title="${e.label || e.type} (${e.duration}턴)">${e.icon || '⚠️'} ${e.duration}</span>`).join('')}
     </div>` : ''
-    }    <div class="hud-info-row">
+    }
+    <div class="hud-info-row">
       <span class="hud-info-item">📍 Tile ${ds.playerPosition}</span>
       <span class="hud-info-item">🌊 Wave ${ds.wave}</span>
       <span class="hud-info-item">🆙 Lv.${ds.level} ${ds.freeStatPoints > 0 ? `<button id="btnOpenStats" class="btn-levelup-trigger pulse">스탯배분</button>` : ''}</span>

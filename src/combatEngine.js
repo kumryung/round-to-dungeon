@@ -113,6 +113,37 @@ export function getHitChance(part) {
     return Math.max(5, Math.min(95, hitChance));
 }
 
+/**
+ * Calculate predicted damage range for UI.
+ * @param {'head'|'body'|'legs'} part
+ * @returns {{ min: number, max: number }}
+ */
+export function getPredictedDamage(part) {
+    if (!combat) return { min: 0, max: 0 };
+
+    const inv = getInventory();
+    const weapon = inv?.equipped;
+    const minWpn = weapon ? weapon.dmgMin : (combat.player.str || 0) + 1; // Basic math fallback
+    const maxWpn = weapon ? weapon.dmgMax : (combat.player.str || 0) + 3;
+
+    // Helper calculate
+    const calc = (base) => {
+        let dmg = Math.max(1, base - combat.monster.def);
+        dmg = Math.round(dmg * PART_MULT[part]);
+
+        // Ghost: physical resist
+        if (combat.monster.ability === 'phys_resist') {
+            dmg = Math.max(1, Math.round(dmg * 0.5));
+        }
+        return Math.max(1, dmg);
+    };
+
+    return {
+        min: calc(minWpn),
+        max: calc(maxWpn),
+    };
+}
+
 // ─── Player Attack ───
 
 /**
@@ -329,6 +360,37 @@ export function attemptFlee() {
 }
 
 // ─── Helpers ───
+
+// ─── Admin Tools ───
+
+export function adminCombatWin() {
+    if (!combat) return;
+    combat.monster.hp = 0;
+    combat.result = 'victory';
+    combat.phase = 'result';
+    combatLog(`⚠️ [Admin] 승리 강제 설정`);
+    if (typeof window.__refreshCombatUI === 'function') window.__refreshCombatUI();
+}
+
+export function adminCombatLose(keepHP = false) {
+    if (!combat) return;
+    combat.result = 'defeat';
+    combat.phase = 'result';
+    if (!keepHP) {
+        combat.player.hp = 0;
+        const ds = getDungeonState();
+        ds.currentHp = 0;
+    }
+    combatLog(`⚠️ [Admin] 패배 강제 설정 (${keepHP ? '보존' : '사망'})`);
+    if (typeof window.__refreshCombatUI === 'function') window.__refreshCombatUI();
+}
+
+// Update global admin hook
+if (window.__admin) {
+    window.__admin.combatWin = adminCombatWin;
+    window.__admin.combatLose = () => adminCombatLose(true);
+    window.__admin.combatKill = () => adminCombatLose(false);
+}
 
 function combatLog(msg) {
     if (combat) combat.log.push(msg);

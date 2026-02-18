@@ -5,10 +5,15 @@ import * as titleScene from './scenes/titleScene.js';
 import * as townScene from './scenes/townScene.js';
 import * as dungeonScene from './scenes/dungeonScene.js';
 
+import { initAdminButton } from './adminManager.js';
+
 // Register all scenes
 registerScene('title', titleScene);
 registerScene('town', townScene);
 registerScene('dungeon', dungeonScene);
+
+// Global UI
+initAdminButton();
 
 // Start with title scene
 changeScene('title');

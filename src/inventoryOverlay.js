@@ -51,28 +51,32 @@ export function showItemToast(item) {
 
 function buildPanelContent(inv) {
     const w = inv.equipped;
+    const isBroken = w.durability <= 0 && w.durability !== Infinity;
     const durPct = w.durability === Infinity ? 100 : Math.round((w.durability / w.maxDurability) * 100);
-    const durText = w.durability === Infinity ? '∞' : `${w.durability}/${w.maxDurability}`;
     const durColor = durPct > 30 ? 'var(--gold)' : 'var(--red)';
-    const broken = w.durability <= 0 && w.durability !== Infinity;
 
     const slotHTML = inv.slots.map((item, i) => renderSlot(item, i, false)).join('');
     const safeHTML = inv.safeBag.map((item, i) => renderSlot(item, i, true)).join('');
+
+    // Equipment slot now looks like a normal slot but with specific styling
+    const equipHTML = `
+        <div class="inv-slot-in inv-equip-slot ${isBroken ? 'equip-broken' : ''}" 
+             data-idx="equip" data-id="${w.id}"
+             data-tooltip-title="${w.emoji} ${w.name}"
+             data-tooltip-desc="${w.desc}"
+             data-tooltip-stats="DMG ${w.dmgMin}~${w.dmgMax} | 내구도 ${w.durability === Infinity ? '∞' : w.durability}">
+            <span class="slot-emoji-in">${w.emoji}</span>
+            <div class="equip-dur-dot" style="background:${durColor}"></div>
+            ${isBroken ? '<span class="slot-broken-icon">💔</span>' : ''}
+        </div>
+    `;
 
     return `
     <div class="inv-panel-inner">
       <!-- Left: Equipment -->
       <div class="inv-col-equip">
         <div class="inv-section-label">⚔️ 장비</div>
-        <div class="inv-equip-card ${broken ? 'equip-broken' : ''}">
-          <span class="equip-emoji">${w.emoji}</span>
-          <div class="equip-info">
-            <span class="equip-name" style="color:${gradeColor(w.grade)}">${w.name}</span>
-            <span class="equip-dmg">DMG ${w.dmgMin}~${w.dmgMax}</span>
-            <div class="equip-dur-bar"><div class="equip-dur-fill" style="width:${durPct}%;background:${durColor}"></div></div>
-            <span class="equip-dur-text">${broken ? '💔 파손' : durText}</span>
-          </div>
-        </div>
+        ${equipHTML}
       </div>
 
       <!-- Center: Main Inventory -->
@@ -90,6 +94,7 @@ function buildPanelContent(inv) {
 
     <!-- Item popup anchor -->
     <div class="inv-popup-anchor" id="invPopupAnchor"></div>
+    <div class="item-tooltip" id="itemTooltip"></div>
   `;
 }
 
@@ -99,9 +104,18 @@ function renderSlot(item, index, isSafe) {
     }
     const qtyBadge = (item.qty && item.qty > 1) ? `<span class="slot-qty">${item.qty}</span>` : '';
     const color = item.grade ? gradeColor(item.grade) : 'var(--text-dim)';
+
+    // Weapon stats?
+    let stats = '';
+    if (item.dmgMin) stats = `DMG ${item.dmgMin}~${item.dmgMax}`;
+    else if (item.value) stats = `효과량 ${item.value}`;
+
     return `
     <div class="inv-slot-in inv-has-item-in" data-idx="${index}" data-safe="${isSafe}"
-         data-id="${item.id}" title="${item.desc}">
+         data-id="${item.id}"
+         data-tooltip-title="${item.emoji} ${item.name}"
+         data-tooltip-desc="${item.desc}"
+         data-tooltip-stats="${stats}">
       <span class="slot-emoji-in">${item.emoji}</span>
       <span class="slot-name-in" style="color:${color}">${item.name}</span>
       ${qtyBadge}
@@ -112,14 +126,67 @@ function renderSlot(item, index, isSafe) {
 // ─── Slot interactions ───
 
 function bindPanelSlotActions(panel) {
-    panel.querySelectorAll('.inv-has-item-in').forEach((el) => {
+    // Click handling (existing)
+    panel.querySelectorAll('.inv-has-item-in, .inv-equip-slot').forEach((el) => {
         el.addEventListener('click', (e) => {
             e.stopPropagation();
-            const idx = parseInt(el.dataset.idx);
-            const isSafe = el.dataset.safe === 'true';
-            showInlinePopup(panel, el, idx, isSafe);
+            if (el.classList.contains('inv-equip-slot')) {
+                // Equip slot click -> maybe just show info? or unequip? 
+                // Currently unequip is strict swap. Let's just show popup for consistency if needed,
+                // but typically we click inventory to equip. 
+                // Check if user wants interaction on equip slot. 
+                // "Mouse over detail" is requested. Click might be bonus. 
+                // Let's allow simple popup for equipment to see details/unequip(maybe future).
+            } else {
+                const idx = parseInt(el.dataset.idx);
+                const isSafe = el.dataset.safe === 'true';
+                showInlinePopup(panel, el, idx, isSafe);
+            }
         });
+
+        // Tooltip handling
+        el.addEventListener('mouseenter', (e) => showTooltip(e, el));
+        el.addEventListener('mouseleave', () => hideTooltip());
+        el.addEventListener('mousemove', (e) => moveTooltip(e));
     });
+}
+
+// ─── Tooltip Logic ───
+function showTooltip(e, el) {
+    const tooltip = document.getElementById('itemTooltip');
+    if (!tooltip) return;
+
+    const title = el.dataset.tooltipTitle;
+    const desc = el.dataset.tooltipDesc;
+    const stats = el.dataset.tooltipStats;
+
+    if (!title) return;
+
+    tooltip.innerHTML = `
+        <div class="tooltip-title">${title}</div>
+        <div class="tooltip-desc">${desc}</div>
+        ${stats ? `<div class="tooltip-stats">${stats}</div>` : ''}
+    `;
+    tooltip.classList.add('visible');
+    moveTooltip(e);
+}
+
+function moveTooltip(e) {
+    const tooltip = document.getElementById('itemTooltip');
+    if (!tooltip || !tooltip.classList.contains('visible')) return;
+
+    // Offset from mouse
+    const x = e.clientX + 15;
+    const y = e.clientY + 15;
+
+    // Boundary check (simple)
+    tooltip.style.left = `${Math.min(x, window.innerWidth - 220)}px`;
+    tooltip.style.top = `${Math.min(y, window.innerHeight - 100)}px`;
+}
+
+function hideTooltip() {
+    const tooltip = document.getElementById('itemTooltip');
+    if (tooltip) tooltip.classList.remove('visible');
 }
 
 function showInlinePopup(panel, slotEl, slotIndex, isSafe) {
