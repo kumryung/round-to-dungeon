@@ -2766,6 +2766,7 @@ button {
   box-shadow: none !important;
   pointer-events: none;
 }
+
 .tile[data-visibility="shroud"] .tile-content,
 .tile[data-visibility="shroud"] .tile-overlay {
   opacity: 0;
@@ -2775,12 +2776,182 @@ button {
 .tile[data-visibility="fog"] {
   filter: grayscale(80%) brightness(40%);
 }
+
 .tile[data-visibility="fog"] .tile-overlay {
-  opacity: 0.5; /* Hide detailed objects partly */
+  opacity: 0.5;
+  /* Hide detailed objects partly */
 }
 
 /* Visible: Currently in view */
 .tile[data-visibility="visible"] {
   filter: none;
   opacity: 1;
+}
+
+/* ══════════════════════════════════════════════════
+   RESPONSIVE DESIGN
+   ══════════════════════════════════════════════════ */
+
+/* Tablet (Small laptops / Tablets) */
+@media (max-width: 1024px) {
+  .dungeon-body {
+    grid-template-columns: 200px 1fr 220px;
+    grid-template-rows: 1fr 140px;
+  }
+}
+
+/* Mobile (Phones) */
+@media (max-width: 768px) {
+
+  /* Title Scene */
+  .title-name {
+    font-size: 36px;
+    letter-spacing: 2px;
+  }
+
+  .title-subtitle {
+    font-size: 14px;
+  }
+
+  .btn-start {
+    padding: 12px 32px;
+    font-size: 16px;
+  }
+
+  /* Town Scene */
+  .town-tab {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .town-main {
+    padding: 12px;
+  }
+
+  .footer-char {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  /* Dungeon Layout - Vertical Stack */
+  .dungeon-body {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    /* Allow full body scroll */
+  }
+
+  .dungeon-topbar {
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dungeon-topbar-info {
+    font-size: 12px;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .btn-return,
+  .btn-craft {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  /* Order: Board -> Action -> HUD -> Log -> Inventory */
+  .dungeon-center {
+    order: 1;
+    padding: 10px;
+    height: auto;
+    /* Fit content */
+    min-height: 300px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .board-container {
+    height: auto;
+    aspect-ratio: 1;
+    max-width: 400px;
+    /* Limit size on mobile */
+  }
+
+  .dungeon-right {
+    order: 2;
+    padding: 12px;
+    height: auto;
+    /* Fit content */
+    border-left: none;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+
+  .action-panel {
+    order: 1;
+  }
+
+  /* Action first */
+  .log-panel {
+    order: 2;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  /* Log second */
+
+  .dungeon-left {
+    order: 3;
+    padding: 12px;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Inline Inventory */
+  .inline-inventory-panel {
+    position: static;
+    /* Position in flow */
+    order: 4;
+    height: auto;
+    grid-column: auto;
+    grid-row: auto;
+    border-top: none;
+    padding: 12px;
+  }
+
+  /* UI Tweaks */
+  .panel h3 {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .btn-action-main {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  /* Combat Overlay Mobile */
+  .combat-modal {
+    width: 95%;
+    padding: 16px;
+  }
+
+  .combat-monster-img {
+    font-size: 64px;
+  }
+
+  .combat-parts {
+    gap: 6px;
+  }
+
+  .btn-part {
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+
+  /* Level Up Overlay Mobile */
+  .levelup-modal {
+    width: 90%;
+    padding: 16px;
+  }
 }
