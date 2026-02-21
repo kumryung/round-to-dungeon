@@ -7,6 +7,7 @@ import { getDungeonState, removeStatusEffect, applyStatusEffect, clearAllStatusE
 import { getCombatState } from './combatEngine.js';
 import { gradeColor } from './data/weapons.js';
 import { SETTINGS } from './data/settings.js';
+import { t } from './i18n.js';
 
 // ─── Public API ───
 
@@ -38,7 +39,8 @@ export function refreshInlineInventory() {
 export function showItemToast(item) {
     const toast = document.createElement('div');
     toast.className = 'item-toast';
-    toast.innerHTML = `<span>${item.emoji}</span> <span>${item.name}</span> 획득!`;
+    const localizedName = item.nameKey ? t(item.nameKey) : item.name;
+    toast.innerHTML = `<span>${item.emoji}</span> <span>${localizedName}</span> ${t('logs.toast_gain', { name: '' }).replace('{emoji}', '')}`;
     document.body.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('toast-visible'));
     setTimeout(() => {
@@ -51,43 +53,52 @@ export function showItemToast(item) {
 
 function buildPanelContent(inv) {
     const w = inv.equipped;
-    const isBroken = w.durability <= 0 && w.durability !== Infinity;
-    const durPct = w.durability === Infinity ? 100 : Math.round((w.durability / w.maxDurability) * 100);
-    const durColor = durPct > 30 ? 'var(--gold)' : 'var(--red)';
+    let equipHTML = '';
+
+    if (w) {
+        const isBroken = w.durability <= 0 && w.durability !== Infinity;
+        const durPct = w.durability === Infinity ? 100 : Math.round((w.durability / w.maxDurability) * 100);
+        const durColor = durPct > 30 ? 'var(--gold)' : 'var(--red)';
+
+        equipHTML = `
+            <div class="inv-slot-in inv-equip-slot ${isBroken ? 'equip-broken' : ''}" 
+                 data-idx="equip" data-id="${w.id}"
+                 data-tooltip-title="${w.emoji} ${w.nameKey ? t(w.nameKey) : w.name}"
+                 data-tooltip-desc="${w.descKey ? t(w.descKey) : w.desc}"
+                 data-tooltip-stats="DMG ${w.dmgMin}~${w.dmgMax} | ${t('ui.equip.durability')} ${w.durability === Infinity ? '∞' : w.durability}">
+                <span class="slot-emoji-in">${w.emoji}</span>
+                <div class="slot-dur-bar" style="border-top-color: ${durColor}; width: ${durPct}%;"></div>
+                ${isBroken ? `<div class="slot-broken-mark">❌</div>` : ''}
+            </div>
+        `;
+    } else {
+        equipHTML = `
+            <div class="inv-slot-in inv-equip-slot" data-idx="equip">
+                <span class="slot-emoji-in" style="opacity: 0.3;">👊</span>
+            </div>
+        `;
+    }
 
     const slotHTML = inv.slots.map((item, i) => renderSlot(item, i, false)).join('');
     const safeHTML = inv.safeBag.map((item, i) => renderSlot(item, i, true)).join('');
-
-    // Equipment slot now looks like a normal slot but with specific styling
-    const equipHTML = `
-        <div class="inv-slot-in inv-equip-slot ${isBroken ? 'equip-broken' : ''}" 
-             data-idx="equip" data-id="${w.id}"
-             data-tooltip-title="${w.emoji} ${w.name}"
-             data-tooltip-desc="${w.desc}"
-             data-tooltip-stats="DMG ${w.dmgMin}~${w.dmgMax} | 내구도 ${w.durability === Infinity ? '∞' : w.durability}">
-            <span class="slot-emoji-in">${w.emoji}</span>
-            <div class="equip-dur-dot" style="background:${durColor}"></div>
-            ${isBroken ? '<span class="slot-broken-icon">💔</span>' : ''}
-        </div>
-    `;
 
     return `
     <div class="inv-panel-inner">
       <!-- Left: Equipment -->
       <div class="inv-col-equip">
-        <div class="inv-section-label">⚔️ 장비</div>
+        <div class="inv-section-label">${t('ui.inventory.equipment')}</div>
         ${equipHTML}
       </div>
 
       <!-- Center: Main Inventory -->
       <div class="inv-col-main">
-        <div class="inv-section-label">🎒 인벤토리 (${inv.slots.filter(s => s).length}/12)</div>
+        <div class="inv-section-label">${t('ui.inventory.inventory')} (${inv.slots.filter(s => s).length}/12)</div>
         <div class="inv-grid-inline">${slotHTML}</div>
       </div>
 
       <!-- Right: Safe Bag -->
       <div class="inv-col-safe">
-        <div class="inv-section-label">🔒 안전 가방 (${inv.safeBag.filter(s => s).length}/2)</div>
+        <div class="inv-section-label">${t('ui.inventory.safe_bag')} (${inv.safeBag.filter(s => s).length}/2)</div>
         <div class="inv-safe-grid">${safeHTML}</div>
       </div>
     </div>
@@ -108,16 +119,16 @@ function renderSlot(item, index, isSafe) {
     // Weapon stats?
     let stats = '';
     if (item.dmgMin) stats = `DMG ${item.dmgMin}~${item.dmgMax}`;
-    else if (item.value) stats = `효과량 ${item.value}`;
+    else if (item.value) stats = t('ui.equip.effect_amount', { value: item.value });
 
     return `
     <div class="inv-slot-in inv-has-item-in" data-idx="${index}" data-safe="${isSafe}"
          data-id="${item.id}"
-         data-tooltip-title="${item.emoji} ${item.name}"
-         data-tooltip-desc="${item.desc}"
+         data-tooltip-title="${item.emoji} ${item.nameKey ? t(item.nameKey) : item.name}"
+         data-tooltip-desc="${item.descKey ? t(item.descKey) : item.desc}"
          data-tooltip-stats="${stats}">
       <span class="slot-emoji-in">${item.emoji}</span>
-      <span class="slot-name-in" style="color:${color}">${item.name}</span>
+      <span class="slot-name-in" style="color:${color}">${item.nameKey ? t(item.nameKey) : item.name}</span>
       ${qtyBadge}
     </div>
   `;
@@ -214,15 +225,15 @@ function showInlinePopup(panel, slotEl, slotIndex, isSafe) {
     popup.style.bottom = `${window.innerHeight - rect.top + 8}px`; // Above the slot
 
     popup.innerHTML = `
-    <div class="popup-header">${item.emoji} ${item.name}</div>
-    <p class="popup-desc">${item.desc}</p>
+    <div class="popup-header">${item.emoji} ${item.nameKey ? t(item.nameKey) : item.name}</div>
+    <p class="popup-desc">${item.descKey ? t(item.descKey) : item.desc}</p>
     <div class="popup-actions">
-      ${isWeapon && !isSafe ? `<button class="popup-btn popup-equip" data-action="equip">장착</button>` : ''}
-      ${isUsable ? `<button class="popup-btn popup-use" data-action="use">사용</button>` : ''}
-      ${!isSafe ? `<button class="popup-btn popup-safe" data-action="safe">안전</button>`
-            : `<button class="popup-btn popup-retrieve" data-action="retrieve">회수</button>`}
-      <button class="popup-btn popup-drop" data-action="drop">버리기</button>
-      <button class="popup-btn popup-cancel" data-action="cancel">닫기</button>
+      ${isWeapon && !isSafe ? `<button class="popup-btn popup-equip" data-action="equip">${t('ui.inventory.action_equip')}</button>` : ''}
+      ${isUsable ? `<button class="popup-btn popup-use" data-action="use">${t('ui.inventory.action_use')}</button>` : ''}
+      ${!isSafe ? `<button class="popup-btn popup-safe" data-action="safe">${t('ui.inventory.action_safe')}</button>`
+            : `<button class="popup-btn popup-retrieve" data-action="retrieve">${t('ui.inventory.action_retrieve')}</button>`}
+      <button class="popup-btn popup-drop" data-action="drop">${t('ui.inventory.action_drop')}</button>
+      <button class="popup-btn popup-cancel" data-action="cancel">${t('ui.inventory.action_close')}</button>
     </div>
   `;
 
@@ -346,7 +357,7 @@ function applyItemEffect(result, ds) {
                 type: 'torch_buff',
                 duration: SETTINGS.torchDuration,
                 icon: '🔦',
-                label: '횃불',
+                label: t('items.t_torch.name'),
             });
             break;
     }

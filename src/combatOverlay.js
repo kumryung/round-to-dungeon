@@ -1,10 +1,14 @@
 // ─── Combat Overlay ───
 // Full-screen overlay UI for turn-based combat
+// Supports multi-enemy (bowling-pin layout) with target memory
 
 import {
     getCombatState, getHitChance, playerAttack, monsterAttack,
-    attemptFlee, determineInitiative, getPredictedDamage,
+    attemptFlee, determineInitiative, getPredictedDamage, getFighterName,
+    setActiveTarget, getActiveTarget
 } from './combatEngine.js';
+import { getDungeonState } from './dungeonState.js';
+import { t } from './i18n.js';
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -24,27 +28,54 @@ export async function showCombat(monster, callbacks = {}) {
     overlay.innerHTML = buildCombatHTML(combat);
     document.body.appendChild(overlay);
 
-    // Expose refresh for inventory usage
+    // Expose refresh functions for cross-module use
     window.__refreshCombatUI = () => {
         updatePlayerHP();
-        updateMonsterHP();
-        refreshHitChances();
+        refreshAllMonsterHP();
+        refreshPartButtons();
+    };
+    window.__refreshCombatMonsters = () => {
+        // Called when a monster is summoned mid-battle — rebuilds the monster area
+        rebuildMonstersArea(combat, callbacks);
     };
 
     // Fade in
     requestAnimationFrame(() => overlay.classList.add('combat-visible'));
 
-    // Determine initiative
-    await delay(400);
-    const first = determineInitiative();
-    refreshCombatLog();
+    // Attach monster click events
+    attachMonsterClickEvents(combat, callbacks);
 
-    if (first === 'monster') {
-        await delay(600);
-        await doMonsterTurn();
-        if (combat.result === 'defeat') {
-            await handleResult(callbacks);
-            return;
+    // Highlight default target
+    highlightSelectedMonster(combat.activeTargetIndex);
+
+    const isResume = combat.nextTurn !== null;
+
+    if (isResume) {
+        // Restore previous combat log
+        refreshCombatLog();
+
+        // If the combat was interrupted and it's the monster's turn, let them act
+        if (combat.nextTurn === 'monster') {
+            await delay(400);
+            await doMonsterTurn();
+            if (combat.result === 'defeat') {
+                await handleResult(callbacks);
+                return;
+            }
+        }
+    } else {
+        // Determine initiative
+        await delay(400);
+        const first = determineInitiative();
+        refreshCombatLog();
+
+        if (first === 'monster') {
+            await delay(600);
+            await doMonsterTurn();
+            if (combat.result === 'defeat') {
+                await handleResult(callbacks);
+                return;
+            }
         }
     }
 
@@ -60,19 +91,60 @@ export async function showCombat(monster, callbacks = {}) {
     }, 200);
 }
 
-function buildCombatHTML(combat) {
-    const m = combat.monster;
-    const p = combat.player;
-    const hpPercent = Math.round((m.hp / m.maxHp) * 100);
-    const playerHpPercent = Math.round((p.hp / p.maxHp) * 100);
+// ─── HTML Building ───
 
-    // Build part buttons
+/**
+ * Build bowling-pin layout for an array of monsters.
+ * Rows: 1, 2, 3... centered. E.g. 3 monsters → [1][2] row then [1] row.
+ */
+function buildMonstersHTML(combat) {
+    const monsters = combat.monsters;
+    // Simple single-row bowling display for now; visual rows based on count
+    // Rows from back to front e.g. [M2 M3] [M1] (reversed for visual depth)
+    // We just render them all in a flex-wrap centered layout with stagger via CSS
+    return `
+        <div class="combat-monsters-arena" id="combatMonstersArena">
+            ${monsters.map((m, i) => buildMonsterCard(m, i, i === combat.activeTargetIndex)).join('')}
+        </div>
+    `;
+}
+
+function buildMonsterCard(m, index, isSelected) {
+    const hpPercent = m.maxHp > 0 ? Math.round((m.hp / m.maxHp) * 100) : 0;
+    const isDead = m.hp <= 0;
+    const tickPercent = m.maxTick > 0 ? Math.round((m.currentTick / m.maxTick) * 100) : 0;
+    const summonBadge = m.isSummon ? `<span class="summon-badge">소환</span>` : '';
+    return `
+        <div class="monster-card ${isDead ? 'monster-dead' : ''} ${isSelected && !isDead ? 'monster-selected' : ''}"
+             data-monster-index="${index}"
+             style="--depth-offset: ${index};">
+            ${summonBadge}
+            <div class="monster-card-emoji">${m.emoji}</div>
+            <div class="monster-card-name">${getFighterName(m)}${m.isSummon ? '' : ` Lv.${m.currentLevel}`}</div>
+            <div class="monster-card-hp-bar">
+                <div class="monster-card-hp-fill" id="monsterHpFill-${index}" style="width:${hpPercent}%"></div>
+            </div>
+            <div class="monster-card-hp-text" id="monsterHpText-${index}">${m.hp}/${m.maxHp}</div>
+            <div class="atb-tick-bar">
+                <div class="atb-tick-fill" id="monsterTickFill-${index}" style="width:${tickPercent}%"></div>
+                <span class="atb-tick-text" id="monsterTickText-${index}">${m.currentTick !== undefined ? m.currentTick.toFixed(1) : '-'}</span>
+            </div>
+            <div class="combat-damage-area" id="monsterDamageArea-${index}"></div>
+            ${isDead ? '<div class="monster-dead-overlay">💀</div>' : ''}
+        </div>
+    `;
+}
+
+function buildPartButtonsHTML(combat) {
+    const target = getActiveTarget();
+    if (!target) return '<p class="no-target-msg">타겟이 없습니다.</p>';
+
     const parts = ['head', 'body', 'legs'];
     const partIcons = { head: '🎯', body: '🫁', legs: '🦵' };
-    const partNames = { head: '머리', body: '몸통', legs: '다리' };
+    const partNames = { head: t('dungeon_ui.part_head'), body: t('dungeon_ui.part_body'), legs: t('dungeon_ui.part_legs') };
 
-    const partButtons = parts.map((part) => {
-        const enabled = m.parts[part];
+    return parts.map((part) => {
+        const enabled = target.parts?.[part] !== false;
         const hitChance = enabled ? getHitChance(part) : 0;
         const dmg = enabled ? getPredictedDamage(part) : { min: 0, max: 0 };
         return `
@@ -82,40 +154,29 @@ function buildCombatHTML(combat) {
                 <span class="part-icon">${partIcons[part]}</span>
                 <div class="part-info">
                     <span class="part-name">${partNames[part]}</span>
-                    <span class="part-hit">${enabled ? hitChance + '%' : '불가'}</span>
+                    <span class="part-hit">${enabled ? hitChance + '%' : t('dungeon_ui.part_disabled')}</span>
                     <span class="part-dmg">${enabled ? `Dmg ${dmg.min}~${dmg.max}` : '-'}</span>
                 </div>
             </button>
         `;
     }).join('');
+}
+
+function buildCombatHTML(combat) {
+    const p = combat.player;
+    const playerHpPercent = Math.round((p.hp / p.maxHp) * 100);
+    const targetName = getFighterName(getActiveTarget());
 
     return `
         <div class="combat-container">
-            <!-- Monster section -->
-            <div class="combat-monster-section">
-                <div class="combat-monster-header">
-                    <span class="combat-monster-emoji">${m.emoji}</span>
-                    <div class="combat-monster-info">
-                        <h2 class="combat-monster-name">${m.name}</h2>
-                        <p class="combat-monster-sub">${m.nameEn} · Lv.${m.currentLevel}</p>
-                        <p class="combat-monster-ability">${m.abilityDesc}</p>
-                    </div>
-                </div>
-                <div class="combat-hp-section">
-                    <label class="combat-hp-label">Monster HP</label>
-                    <div class="combat-hp-bar monster-hp-bar">
-                        <div class="combat-hp-fill" id="monsterHpFill" style="width:${hpPercent}%"></div>
-                        <span class="combat-hp-text" id="monsterHpText">${m.hp}/${m.maxHp}</span>
-                    </div>
-                </div>
-                <div class="combat-damage-area" id="monsterDamageArea"></div>
-            </div>
+            <!-- Monster bowling-pin area -->
+            ${buildMonstersHTML(combat)}
 
-            <!-- Body part selection -->
+            <!-- Body part selection (for active target) -->
             <div class="combat-action-section">
-                <p class="combat-action-label">부위를 선택하여 공격하세요</p>
+                <p class="combat-action-label">${t('dungeon_ui.select_part_attack')} · <span id="activeTargetLabel">${targetName}</span></p>
                 <div class="combat-parts" id="combatParts">
-                    ${partButtons}
+                    ${buildPartButtonsHTML(combat)}
                 </div>
             </div>
 
@@ -123,14 +184,18 @@ function buildCombatHTML(combat) {
             <div class="combat-player-section">
                 <div class="combat-player-header">
                     <span class="combat-player-portrait">${p.portrait}</span>
-                    <span class="combat-player-name">${p.name}</span>
+                    <span class="combat-player-name">${getFighterName(p)}</span>
                 </div>
                 <div class="combat-hp-section">
-                    <label class="combat-hp-label">Player HP</label>
+                    <label class="combat-hp-label">${t('dungeon_ui.player_hp')}</label>
                     <div class="combat-hp-bar player-hp-bar">
                         <div class="combat-hp-fill" id="playerHpFill" style="width:${playerHpPercent}%"></div>
                         <span class="combat-hp-text" id="playerHpText">${p.hp}/${p.maxHp}</span>
                     </div>
+                </div>
+                <div class="atb-tick-bar player-tick-bar">
+                    <div class="atb-tick-fill player-tick" id="playerTickFill" style="width:${p.maxTick > 0 ? Math.round((p.currentTick / p.maxTick) * 100) : 0}%"></div>
+                    <span class="atb-tick-text" id="playerTickText">${p.currentTick !== undefined ? p.currentTick.toFixed(1) : '-'}</span>
                 </div>
                 <div class="combat-damage-area" id="playerDamageArea"></div>
             </div>
@@ -139,7 +204,7 @@ function buildCombatHTML(combat) {
             <div class="combat-log-section">
                 <div class="combat-log" id="combatLog"></div>
                 <div class="combat-actions-row">
-                  <button class="btn-flee" id="btnFlee">🏃 도망가기</button>
+                  <button class="btn-flee" id="btnFlee">🏃 ${t('dungeon_ui.flee_btn')}</button>
                   <div class="combat-admin-controls">
                     <button class="btn-admin-small" id="btnAdminWin">⚔️Win</button>
                     <button class="btn-admin-small" id="btnAdminLose">🏳️Lose</button>
@@ -150,6 +215,43 @@ function buildCombatHTML(combat) {
         </div>
     `;
 }
+
+// ─── Monster Interaction ───
+
+function attachMonsterClickEvents(combat, callbacks) {
+    const arena = document.getElementById('combatMonstersArena');
+    if (!arena) return;
+
+    arena.querySelectorAll('.monster-card:not(.monster-dead)').forEach(card => {
+        const idx = parseInt(card.dataset.monsterIndex);
+        card.addEventListener('click', () => {
+            if (combat.result) return;
+            if (setActiveTarget(idx)) {
+                highlightSelectedMonster(idx);
+                refreshPartButtons();
+                // Update active target label
+                const label = document.getElementById('activeTargetLabel');
+                if (label) label.textContent = getFighterName(getActiveTarget());
+            }
+        });
+    });
+}
+
+function highlightSelectedMonster(index) {
+    document.querySelectorAll('.monster-card').forEach((card, i) => {
+        card.classList.toggle('monster-selected', i === index && !card.classList.contains('monster-dead'));
+    });
+}
+
+function rebuildMonstersArea(combat, callbacks) {
+    const arena = document.getElementById('combatMonstersArena');
+    if (!arena) return;
+    arena.innerHTML = combat.monsters.map((m, i) => buildMonsterCard(m, i, i === combat.activeTargetIndex)).join('');
+    attachMonsterClickEvents(combat, callbacks);
+    highlightSelectedMonster(combat.activeTargetIndex);
+}
+
+// ─── HP Updates ───
 
 function updatePlayerHP() {
     const combat = getCombatState();
@@ -162,33 +264,57 @@ function updatePlayerHP() {
     if (text) text.textContent = `${p.hp}/${p.maxHp}`;
 }
 
-function updateMonsterHP() {
+function refreshAllMonsterHP() {
     const combat = getCombatState();
     if (!combat) return;
-    const m = combat.monster;
-    const pct = Math.max(0, Math.min(100, Math.round((m.hp / m.maxHp) * 100)));
-    const fill = document.getElementById('monsterHpFill');
-    const text = document.getElementById('monsterHpText');
-    if (fill) fill.style.width = `${pct}%`;
-    if (text) text.textContent = `${m.hp}/${m.maxHp}`;
+    combat.monsters.forEach((m, i) => {
+        const pct = m.maxHp > 0 ? Math.max(0, Math.min(100, Math.round((m.hp / m.maxHp) * 100))) : 0;
+        const fill = document.getElementById(`monsterHpFill-${i}`);
+        const text = document.getElementById(`monsterHpText-${i}`);
+        if (fill) fill.style.width = `${pct}%`;
+        if (text) text.textContent = `${m.hp}/${m.maxHp}`;
+
+        // Mark dead
+        const card = document.querySelector(`.monster-card[data-monster-index="${i}"]`);
+        if (card) {
+            card.classList.toggle('monster-dead', m.hp <= 0);
+            if (m.hp <= 0 && !card.querySelector('.monster-dead-overlay')) {
+                card.innerHTML += '<div class="monster-dead-overlay">💀</div>';
+            }
+        }
+    });
 }
+
+function refreshPartButtons() {
+    const partsContainer = document.getElementById('combatParts');
+    if (!partsContainer) return;
+    const combat = getCombatState();
+    if (!combat) return;
+    partsContainer.innerHTML = buildPartButtonsHTML(combat);
+    // Re-attach part click events
+    if (!combat.result) {
+        attachPartEvents(combat.__pendingCallbacks);
+    }
+}
+
+// ─── Combat Flow ───
 
 async function doMonsterTurn() {
     const combat = getCombatState();
     if (!combat) return;
 
-    // Visual cue
-    document.querySelector('.combat-monster-section').classList.add('monster-acting');
+    // Light up arena
+    const arena = document.getElementById('combatMonstersArena');
+    if (arena) arena.classList.add('monsters-acting');
     await delay(500);
 
     const { damage, evaded } = monsterAttack();
-    document.querySelector('.combat-monster-section').classList.remove('monster-acting');
+    if (arena) arena.classList.remove('monsters-acting');
 
     refreshCombatLog();
 
     if (damage > 0) {
         showDamageFloat('playerDamageArea', damage, 'player');
-        // Shake screen?
         document.body.classList.add('shake');
         setTimeout(() => document.body.classList.remove('shake'), 400);
     } else if (evaded) {
@@ -205,44 +331,10 @@ function enablePlayerActions(callbacks) {
     const combat = getCombatState();
     if (!combat || combat.result) return;
 
-    // Parts
-    const partBtns = document.querySelectorAll('.part-btn:not(.part-disabled)');
-    partBtns.forEach((btn) => {
-        btn.disabled = false;
-        btn.onclick = async () => {
-            // Disable interactions
-            disableAllActions();
+    // Store callbacks for refresh use
+    combat.__pendingCallbacks = callbacks;
 
-            const part = btn.dataset.part;
-            const { hit, damage, critical, weaponBroke } = playerAttack(part);
-            refreshCombatLog();
-
-            if (hit) {
-                showDamageFloat('monsterDamageArea', damage, critical ? 'critical' : 'monster');
-                updateMonsterHP();
-                if (weaponBroke) {
-                    // Maybe toast?
-                }
-            } else {
-                showDamageFloat('monsterDamageArea', 'Miss', 'monster');
-            }
-
-            if (combat.result === 'victory') {
-                await delay(800);
-                await handleResult(callbacks);
-            } else {
-                // Monster turn
-                await delay(600);
-                await doMonsterTurn();
-                if (combat.result === 'defeat') {
-                    await handleResult(callbacks);
-                } else {
-                    enablePlayerActions(callbacks);
-                }
-            }
-            refreshHitChances();
-        };
-    });
+    attachPartEvents(callbacks);
 
     // Flee
     const btnFlee = document.getElementById('btnFlee');
@@ -273,9 +365,52 @@ function enablePlayerActions(callbacks) {
     const btnLose = document.getElementById('btnAdminLose');
     const btnKill = document.getElementById('btnAdminKill');
 
-    if (btnWin) btnWin.onclick = () => window.__admin.combatWin();
-    if (btnLose) btnLose.onclick = () => window.__admin.combatLose();
-    if (btnKill) btnKill.onclick = () => window.__admin.combatKill();
+    if (btnWin) btnWin.onclick = () => window.__admin?.combatWin();
+    if (btnLose) btnLose.onclick = () => window.__admin?.combatLose();
+    if (btnKill) btnKill.onclick = () => window.__admin?.combatKill();
+}
+
+function attachPartEvents(callbacks) {
+    const combat = getCombatState();
+    if (!combat || !callbacks) return;
+
+    const partBtns = document.querySelectorAll('.part-btn:not(.part-disabled)');
+    partBtns.forEach((btn) => {
+        btn.disabled = false;
+        btn.onclick = async () => {
+            disableAllActions();
+
+            const part = btn.dataset.part;
+            const { hit, damage, critical, weaponBroke, targetIndex } = playerAttack(part);
+            refreshCombatLog();
+
+            if (hit) {
+                showDamageFloat(`monsterDamageArea-${targetIndex}`, damage, critical ? 'critical' : 'monster');
+                refreshAllMonsterHP();
+                highlightSelectedMonster(combat.activeTargetIndex);
+            } else {
+                showDamageFloat(`monsterDamageArea-${targetIndex}`, 'Miss', 'monster');
+            }
+
+            if (combat.result === 'victory') {
+                await delay(800);
+                await handleResult(callbacks);
+            } else {
+                // Keep targeting the same monster (or auto-selected one)
+                const activeLabel = document.getElementById('activeTargetLabel');
+                if (activeLabel) activeLabel.textContent = getFighterName(getActiveTarget());
+                refreshPartButtons();
+
+                await delay(600);
+                await doMonsterTurn();
+                if (combat.result === 'defeat') {
+                    await handleResult(callbacks);
+                } else {
+                    enablePlayerActions(callbacks);
+                }
+            }
+        };
+    });
 }
 
 function disableAllActions() {
@@ -287,6 +422,9 @@ function disableAllActions() {
 
 async function handleResult(callbacks) {
     const combat = getCombatState();
+    if (combat.handled) return;
+    combat.handled = true;
+
     await delay(1000);
 
     const overlay = document.getElementById('combatOverlay');
@@ -298,17 +436,16 @@ async function handleResult(callbacks) {
 
     // Clean up global refresh
     delete window.__refreshCombatUI;
+    delete window.__refreshCombatMonsters;
 
     if (combat.result === 'victory') {
-        if (callbacks.onVictory) callbacks.onVictory();
+        if (callbacks.onVictory) callbacks.onVictory(combat.monsters);
     } else if (combat.result === 'defeat') {
         if (callbacks.onDefeat) callbacks.onDefeat();
     } else if (combat.result === 'fled') {
         if (callbacks.onFlee) callbacks.onFlee();
     }
 }
-
-// ... (lines 135-292 omitted)
 
 function refreshHitChances() {
     const combat = getCombatState();

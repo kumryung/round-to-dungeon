@@ -11,19 +11,13 @@ let inv = null;
  * Initialize inventory for a dungeon run.
  * @param {object} wanderer - Character data
  */
-export function initInventory(wanderer) {
+export function initInventory(wanderer, prepInv = null, prepSafeBag = null) {
     const maxWeight = 100;
 
-    // Determine starting weapon
-    let equipped = getWeapon('w_fist');
-    if (wanderer.startWeapon && WEAPONS[wanderer.startWeapon]) {
-        equipped = getWeapon(wanderer.startWeapon);
-    }
-
     inv = {
-        slots: new Array(SETTINGS.inventorySlots).fill(null),      // General slots
-        safeBag: new Array(SETTINGS.safeBagSlots).fill(null),      // Safe bag slots
-        equipped,                               // Weapon slot
+        slots: prepInv || new Array(SETTINGS.inventorySlots).fill(null),      // General slots
+        safeBag: prepSafeBag || new Array(SETTINGS.safeBagSlots).fill(null),  // Safe bag slots
+        equipped: null,                               // Weapon slot starts empty
         maxWeight: SETTINGS.maxWeight,
     };
 

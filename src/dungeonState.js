@@ -3,6 +3,11 @@
 
 import { setTileObject, movePlayerToken } from './mapEngine.js';
 import { SETTINGS } from './data/settings.js';
+import { setActiveDungeon } from './gameState.js';
+import { getInventory } from './inventory.js';
+import { getCombatState } from './combatEngine.js';
+import { updateDungeonStatus } from './gameState.js';
+import { t } from './i18n.js';
 
 /** @type {object} */
 let ds = {};
@@ -40,6 +45,15 @@ export function initDungeonState(tiles, mapData, wanderer) {
     return ds;
 }
 
+export function loadDungeonState(savedDs) {
+    ds = savedDs;
+    // Functions are stripped by JSON serialization, so we explicitly null them
+    // The scene will re-assign them
+    ds.logCallback = null;
+    ds.updateCallback = null;
+    return ds;
+}
+
 export function getDungeonState() {
     return ds;
 }
@@ -57,7 +71,24 @@ function log(msg) {
 }
 
 function triggerUpdate() {
+    const inv = getInventory();
+    if (inv) {
+        ds.inventory = {
+            slots: inv.slots,
+            safeBag: inv.safeBag,
+            equipped: inv.equipped
+        };
+    }
+
+    const combat = getCombatState();
+    if (combat && combat.result === null) {
+        ds.combat = combat;
+    } else {
+        ds.combat = null;
+    }
+
     if (ds.updateCallback) ds.updateCallback(ds);
+    setActiveDungeon(ds);
 }
 
 // ─── EXP / Level ───
@@ -81,7 +112,7 @@ export function grantExp(amount) {
         ds.expToNext = SETTINGS.expTable[tableIdx] || SETTINGS.expTable[SETTINGS.expTable.length - 1];
 
         leveledUp = true;
-        log(`🎉 레벨 업! Lv.${ds.level} — 프리스탯 +${SETTINGS.freeStatPerLevel}`);
+        log(t('logs.level_up', { level: ds.level, points: SETTINGS.freeStatPerLevel }));
     }
 
     triggerUpdate();
@@ -106,7 +137,7 @@ export function allocateStat(statName) {
         const hpGain = 5; // 1 VIT = 5 HP
         ds.maxHp += hpGain;
         ds.currentHp += hpGain;
-        log(`💪 VIT +1 (HP +${hpGain}, 현재 ${ds.maxHp})`);
+        log(t('logs.stat_vit_up', { hp: hpGain, maxHp: ds.maxHp }));
     } else {
         ds.wanderer[statName] = (ds.wanderer[statName] || 0) + 1;
         log(`💪 ${statName.toUpperCase()} +1 (현재 ${ds.wanderer[statName]})`);
@@ -123,38 +154,125 @@ export function allocateStat(statName) {
  * @param {{ type: string, duration: number, icon?: string, label?: string }} effect
  */
 export function applyStatusEffect(effect) {
-    // Remove duplicate if exists
-    ds.statusEffects = ds.statusEffects.filter(e => e.type !== effect.type);
-    ds.statusEffects.push(effect);
-    log(`✨ 상태이상: ${effect.label || effect.type} (${effect.duration}턴)`);
-
-    if (effect.type === 'torch_buff') {
-        updateVisibility(); // Immediate view range update
-    }
-
+    if (!effect || !effect.id) return;
+    // Refresh if same status already active
+    ds.statusEffects = ds.statusEffects.filter(e => e.id !== effect.id);
+    ds.statusEffects.push({ ...effect });
+    const label = effect.label || effect.labelKey || effect.id;
+    const durText = effect.duration === Infinity ? '∞' : `${effect.duration}턴`;
+    log(`${effect.icon || '⚡'} ${label} 부여됨 (${durText})`);
     triggerUpdate();
+    updateDungeonStatus(ds);
 }
 
 /**
- * Remove a status effect by type.
+ * Tick all active status effects by 1 turn.
+ * Applies per-tick HP/Sanity changes and removes expired effects.
  */
-export function removeStatusEffect(type) {
-    const idx = ds.statusEffects.findIndex(e => e.type === type);
+export function tickStatuses() {
+    if (!ds.statusEffects || ds.statusEffects.length === 0) return;
+    const expired = [];
+    for (const eff of ds.statusEffects) {
+        // Apply tick damage/healing
+        if (eff.hpTick && eff.hpTick !== 0) {
+            if (eff.hpTick < 0) {
+                ds.currentHp = Math.max(0, ds.currentHp + eff.hpTick);
+                log(`${eff.icon || '⚡'} ${eff.id}: HP ${eff.hpTick}`);
+            } else {
+                ds.currentHp = Math.min(ds.maxHp, ds.currentHp + eff.hpTick);
+            }
+        }
+        if (eff.sanityTick && eff.sanityTick !== 0) {
+            if (eff.sanityTick < 0) {
+                reduceSanity(Math.abs(eff.sanityTick));
+            } else {
+                ds.sanity = Math.min(ds.maxSanity, ds.sanity + eff.sanityTick);
+            }
+        }
+        // Decrement duration
+        if (eff.duration !== Infinity) {
+            eff.duration--;
+            if (eff.duration <= 0) expired.push(eff.id);
+        }
+    }
+    // Remove expired
+    if (expired.length > 0) {
+        ds.statusEffects = ds.statusEffects.filter(e => !expired.includes(e.id));
+        expired.forEach(id => log(`✅ ${id} 상태이상 종료`));
+    }
+    triggerUpdate();
+    updateDungeonStatus(ds);
+}
+
+/**
+ * Compute flat stat modifiers from all active status effects.
+ * Returns an object used by combatEngine.
+ */
+export function getStatusModifiers() {
+    const mods = { atkMul: 0, maxHpMul: 0, hitMod: 0, evadeMod: 0, evadeMul: 0, spdMul: 0, hpTick: 0, sanityTick: 0 };
+    for (const eff of (ds.statusEffects || [])) {
+        const sm = eff.statMod || {};
+        for (const [k, v] of Object.entries(sm)) {
+            mods[k] = (mods[k] || 0) + v;
+        }
+        if (eff.hpTick) mods.hpTick += eff.hpTick;
+        if (eff.sanityTick) mods.sanityTick += eff.sanityTick;
+    }
+    return mods;
+}
+
+/**
+ * Remove a specific status effect by id (e.g. bandage clears bleed).
+ */
+export function removeStatusEffect(id) {
+    const idx = ds.statusEffects.findIndex(e => e.id === id);
     if (idx !== -1) {
-        const removed = ds.statusEffects.splice(idx, 1)[0];
-        log(`✅ 상태이상 해제: ${removed.icon || ''} ${removed.label || removed.type}`);
+        ds.statusEffects.splice(idx, 1);
+        log(`✅ ${id} 상태이상 해제됨`);
         triggerUpdate();
         updateVisibility(); // Re-calculate visibility if torch buff is applied/removed
+        updateDungeonStatus(ds);
         return true;
     }
     return false;
 }
 
+
+/**
+ * Reduce sanity naturally or by event, applying phobia trait checks.
+ * @param {number} amount
+ */
+export function reduceSanity(amount) {
+    if (amount <= 0) return;
+
+    // Check traits for phobia modifiers
+    let multiplier = 1.0;
+    if (ds.wanderer && ds.wanderer.traits && ds.mapData) {
+        const t = ds.wanderer.traits;
+        const theme = ds.mapData.theme || 'ruins'; // fallback
+
+        // General Coward trait check (+30%)
+        if (t.some(trait => trait.id === 't_neg_coward')) {
+            multiplier += 0.3;
+        }
+
+        // Theme Phobia check (+50%)
+        const phobiaId = `t_neg_${theme}_phobia`;
+        if (t.some(trait => trait.id === phobiaId)) {
+            multiplier += 0.5;
+        }
+    }
+
+    const finalAmount = Math.ceil(amount * multiplier);
+    ds.sanity = Math.max(0, ds.sanity - finalAmount);
+    return finalAmount;
+}
+
 /**
  * Check if player has a specific status effect.
  */
-export function hasStatusEffect(type) {
-    return ds.statusEffects.some(e => e.type === type);
+export function hasStatusEffect(id) {
+    return ds.statusEffects.some(e => e.id === id);
 }
 
 /**
@@ -163,7 +281,7 @@ export function hasStatusEffect(type) {
 export function clearAllStatusEffects() {
     if (ds.statusEffects.length > 0) {
         ds.statusEffects = [];
-        log(`✨ 모든 상태이상이 해제되었습니다!`);
+        log(t('logs.status_all_cleared'));
         triggerUpdate();
         updateVisibility(); // Re-calculate visibility if torch buff was cleared
     }
@@ -181,11 +299,11 @@ export function tickStatusEffects() {
         switch (effect.type) {
             case 'poison':
                 ds.currentHp = Math.max(0, ds.currentHp - SETTINGS.poisonDamagePerTurn);
-                log(`🟢 중독! HP -${SETTINGS.poisonDamagePerTurn}`);
+                log(t('logs.status_poison', { damage: SETTINGS.poisonDamagePerTurn }));
                 break;
             case 'burn':
-                ds.sanity = Math.max(0, ds.sanity - SETTINGS.burnSanityPerTurn);
-                log(`🔥 화상! 정신력 -${SETTINGS.burnSanityPerTurn}`);
+                const reduced = reduceSanity(SETTINGS.burnSanityPerTurn);
+                log(t('logs.status_burn', { sanity: reduced }));
                 break;
             // torch_buff: handled in executeMovePhase (prevents sanity loss)
         }
@@ -204,7 +322,7 @@ export function tickStatusEffects() {
         const effect = ds.statusEffects.find(e => e.type === type);
         ds.statusEffects = ds.statusEffects.filter(e => e.type !== type);
         if (effect) {
-            log(`⏰ ${effect.icon || ''} ${effect.label || type} 효과가 사라졌습니다.`);
+            log(t('logs.status_expired', { icon: effect.icon || '', label: effect.label || type }));
         }
     }
 
@@ -326,7 +444,7 @@ export function commitSpawn(placement) {
  */
 export function executeSpawnPhase() {
     const rolls = rollSpawnDice();
-    log(`🎲 스폰 주사위  — 몬스터: ${rolls.monsterRoll} | 보물: ${rolls.treasureRoll} | 이벤트: ${rolls.eventRoll}`);
+    log(t('logs.spawn_dice', { monster: rolls.monsterRoll, treasure: rolls.treasureRoll, event: rolls.eventRoll }));
     const placements = getSpawnPlacements(rolls);
     placements.forEach((p) => commitSpawn(p));
     ds.phase = 'move';
@@ -346,10 +464,10 @@ export function executeMovePhase() {
 
     // Sanity drops by cost per move (unless torch buff active)
     if (!hasStatusEffect('torch_buff')) {
-        ds.sanity = Math.max(0, ds.sanity - SETTINGS.sanityCostPerMove);
-        log(`🎲 이동 주사위: ${roll}  (정신력 -${SETTINGS.sanityCostPerMove})`);
+        const reduced = reduceSanity(SETTINGS.sanityCostPerMove);
+        log(t('logs.move_dice_sanity', { roll, cost: reduced }));
     } else {
-        log(`🎲 이동 주사위: ${roll}  (🔦 횃불 효과로 정신력 유지)`);
+        log(t('logs.move_dice_torch', { roll }));
     }
 
     // Tick status effects each move
@@ -369,7 +487,7 @@ export function executeMovePhase() {
         // Forced stop at start tile
         if (currentPos === 0 && stepsRemaining > 0) {
             stoppedAtStart = true;
-            log(`🏠 시작점 강제 정지! (남은 이동: ${stepsRemaining} 무시)`);
+            log(t('logs.force_stop_start', { remaining: stepsRemaining }));
             stepsRemaining = 0;
         }
     }
@@ -432,18 +550,19 @@ export function handleTileInteraction() {
     }
 
     if (tile.type === 'corner') {
-        log(`❓ 이벤트 타일! (고정 이벤트 — 추후 구현)`);
+        log(t('logs.event_corner'));
         return { type: 'corner_event', data: null };
     }
 
     if (tile.object === 'monster') {
-        const name = tile.objectData?.monsterId?.replace('m_', '') || 'unknown';
-        log(`💀 몬스터 조우! — ${name} (Lv.${tile.objectData?.level || 1})`);
+        const nameKey = tile.objectData?.monsterId ? `monsters.${tile.objectData.monsterId}.name` : null;
+        const name = nameKey ? t(nameKey) : tile.objectData?.monsterId || 'unknown';
+        log(t('logs.combat_encounter', { name, level: tile.objectData?.level || 1 }));
         return { type: 'monster', data: tile.objectData };
     }
 
     if (tile.object === 'chest') {
-        log(`📦 보물상자 발견!`);
+        log(t('logs.chest_found'));
         // Clear the chest
         tile.object = null;
         tile.objectData = null;
@@ -452,14 +571,14 @@ export function handleTileInteraction() {
     }
 
     if (tile.object === 'event') {
-        log(`❓ 이벤트 발생! (추후 구현)`);
+        log(t('logs.event_found'));
         tile.object = null;
         tile.objectData = null;
         setTileObject(tile.index, null);
         return { type: 'event', data: null };
     }
 
-    log(`→ 빈 타일. 아무 일도 일어나지 않았다.`);
+    log(t('logs.empty_tile'));
     return { type: 'empty', data: null };
 }
 
@@ -470,7 +589,7 @@ export function handleTileInteraction() {
  */
 export function advanceWave() {
     ds.wave++;
-    log(`\n═══ Wave ${ds.wave} 시작! ═══`);
+    log(`\n═══ ${t('logs.wave_start', { wave: ds.wave })} ═══`);
 
     // Clear existing non-monster objects (chests/events)
     ds.tiles.forEach((tile) => {
@@ -488,16 +607,58 @@ export function advanceWave() {
         }
     });
 
-    log(`⬆️ 기존 몬스터 레벨업 → Lv.${ds.wave}`);
+    log(t('logs.monster_level_up', { wave: ds.wave }));
 
     triggerUpdate();
 }
 
 // ─── Sanity helpers ───
 
+/**
+ * Returns the current sanity tier and all associated gameplay modifiers.
+ * 7 tiers: 광명 (91-100), 안정 (76-90), 경계 (61-75), 불안 (41-60), 공포 (21-40), 절망 (11-20), 패닉 (0-10)
+ */
 export function getSanityStatus(sanity) {
-    if (sanity >= 70) return { label: '평정', class: 'sanity-normal' };
-    if (sanity >= 31) return { label: '불안', class: 'sanity-anxiety' };
-    if (sanity >= 11) return { label: '공포', class: 'sanity-panic' };
-    return { label: '광기', class: 'sanity-madness' };
+    if (sanity >= 91) return {
+        labelKey: 'dungeon_ui.sanity_radiant', class: 'sanity-radiant',
+        playerAcc: +10, evasion: +5, preemptive: +15, flee: +15, itemDiscover: +20,
+        allyСrit: 0, sanityDecayMult: 1.0,
+        monsterAcc: 0, monsterDmg: 0, monsterCrit: 0, ambush: 0,
+    };
+    if (sanity >= 76) return {
+        labelKey: 'dungeon_ui.sanity_stable', class: 'sanity-stable',
+        playerAcc: +5, evasion: +2, preemptive: +10, flee: +10, itemDiscover: +10,
+        allyCrit: 0, sanityDecayMult: 1.0,
+        monsterAcc: 0, monsterDmg: 0, monsterCrit: 0, ambush: 0,
+    };
+    if (sanity >= 61) return {
+        labelKey: 'dungeon_ui.sanity_alert', class: 'sanity-alert',
+        playerAcc: 0, evasion: 0, preemptive: +5, flee: 0, itemDiscover: +5,
+        allyCrit: 0, sanityDecayMult: 1.05,
+        monsterAcc: 0, monsterDmg: 0, monsterCrit: +1, ambush: 0,
+    };
+    if (sanity >= 41) return {
+        labelKey: 'dungeon_ui.sanity_anxious', class: 'sanity-anxious',
+        playerAcc: -5, evasion: 0, preemptive: 0, flee: -5, itemDiscover: 0,
+        allyCrit: +1, sanityDecayMult: 1.10,
+        monsterAcc: +5, monsterDmg: +10, monsterCrit: +2, ambush: +10,
+    };
+    if (sanity >= 21) return {
+        labelKey: 'dungeon_ui.sanity_fear', class: 'sanity-fear',
+        playerAcc: -10, evasion: 0, preemptive: 0, flee: -15, itemDiscover: -10,
+        allyCrit: +2, sanityDecayMult: 1.15,
+        monsterAcc: +10, monsterDmg: +15, monsterCrit: +5, ambush: +20,
+    };
+    if (sanity >= 11) return {
+        labelKey: 'dungeon_ui.sanity_despair', class: 'sanity-despair',
+        playerAcc: -15, evasion: 0, preemptive: 0, flee: -25, itemDiscover: -20,
+        allyCrit: +3, sanityDecayMult: 1.20,
+        monsterAcc: +15, monsterDmg: +20, monsterCrit: +10, ambush: +30,
+    };
+    return {
+        labelKey: 'dungeon_ui.sanity_panic', class: 'sanity-panic',
+        playerAcc: -20, evasion: 0, preemptive: 0, flee: -40, itemDiscover: -30,
+        allyCrit: +5, sanityDecayMult: 1.30,
+        monsterAcc: +25, monsterDmg: +30, monsterCrit: +15, ambush: +40,
+    };
 }

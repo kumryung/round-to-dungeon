@@ -9,9 +9,9 @@ import { SETTINGS } from './data/settings.js';
  * @returns {Array<object>} tiles
  */
 export function generateTiles(mapData) {
-    const sideLength = SETTINGS.baseMapSize + mapData.mapLv;
+    const totalTiles = mapData.tiles;
+    const sideLength = totalTiles / 4;
     const g = sideLength + 1; // gridSize
-    const totalTiles = sideLength * 4;
     // Corners: top-left(0), top-right(g-1), bottom-right(g + g-2), bottom-left(g + 2*(g-1) - 1)
     const corners = [0, g - 1, g + (g - 2), g + 2 * (g - 1) - 1];
 
@@ -146,10 +146,17 @@ function createTileElement(tile) {
         el.appendChild(icon);
     }
 
-    // Object overlay
+    // Object overlay (restoring upon resume)
     const objEl = document.createElement('span');
     objEl.className = 'tile-object';
     objEl.id = `tile-obj-${tile.index}`;
+
+    if (tile.object) {
+        const icons = { monster: '💀', chest: '📦', event: '❓' };
+        objEl.textContent = icons[tile.object] || '';
+        el.classList.add(`has-${tile.object}`);
+    }
+
     el.appendChild(objEl);
 
     return el;

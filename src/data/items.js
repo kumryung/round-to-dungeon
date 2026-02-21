@@ -1,99 +1,156 @@
 // ─── Item Data ───
 // Source: DATASET.md §4 + loot tables
+// Grade: common(1) | uncommon(2) | magic(3) | rare(4) | epic(5) | legendary(6)
 
 export const ITEMS = {
     // ── Tools ──
     t_shovel: {
-        id: 't_shovel', type: 'tool', name: '삽', emoji: '⛏️',
-        desc: '구덩이 탈출, 숨겨진 아이템 발견',
-        effect: 'shovel', stackable: false,
+        id: 't_shovel', type: 'tool', grade: 'common', nameKey: 'items.t_shovel.name', descKey: 'items.t_shovel.desc', emoji: '⛏️',
+        effect: 'shovel', stackable: false, maxStack: 1, price: 150,
     },
     t_key: {
-        id: 't_key', type: 'tool', name: '열쇠', emoji: '🔑',
-        desc: '잠긴 상자/문 잠금 해제',
-        effect: 'key', stackable: true,
+        id: 't_key', type: 'tool', grade: 'common', nameKey: 'items.t_key.name', descKey: 'items.t_key.desc', emoji: '🔑',
+        effect: 'key', stackable: true, maxStack: 10, price: 120,
     },
     t_holywater: {
-        id: 't_holywater', type: 'tool', name: '성수', emoji: '💧',
-        desc: '정신력(Sanity) +30 회복',
-        effect: 'sanity_restore', value: 30, stackable: true,
+        id: 't_holywater', type: 'tool', grade: 'uncommon', nameKey: 'items.t_holywater.name', descKey: 'items.t_holywater.desc', emoji: '💧',
+        effect: 'sanity_restore', value: 30, stackable: true, maxStack: 10, price: 200,
     },
     t_torch: {
-        id: 't_torch', type: 'tool', name: '횃불', emoji: '🔦',
-        desc: '어두운 지역 시야 확보, 정신력 감소 방지',
-        effect: 'torch', stackable: true,
+        id: 't_torch', type: 'tool', grade: 'common', nameKey: 'items.t_torch.name', descKey: 'items.t_torch.desc', emoji: '🔦',
+        effect: 'torch', stackable: true, maxStack: 10, price: 80,
     },
     // ── Consumables ──
     c_bandage: {
-        id: 'c_bandage', type: 'consumable', name: '붕대', emoji: '🩹',
-        desc: '소량 체력 회복 (+15 HP)',
-        effect: 'heal', value: 15, stackable: true,
+        id: 'c_bandage', type: 'consumable', grade: 'common', nameKey: 'items.c_bandage.name', descKey: 'items.c_bandage.desc', emoji: '🩹',
+        effect: 'heal', value: 15, stackable: true, maxStack: 99, price: 50,
     },
     c_splint: {
-        id: 'c_splint', type: 'consumable', name: '부목', emoji: '🦴',
-        desc: '골절 상태 완화',
-        effect: 'cure_fracture', stackable: true,
+        id: 'c_splint', type: 'consumable', grade: 'common', nameKey: 'items.c_splint.name', descKey: 'items.c_splint.desc', emoji: '🦴',
+        effect: 'cure_fracture', stackable: true, maxStack: 99, price: 180,
     },
     c_antidote: {
-        id: 'c_antidote', type: 'consumable', name: '해독제', emoji: '🧪',
-        desc: '중독 상태 제거',
-        effect: 'cure_poison', stackable: true,
+        id: 'c_antidote', type: 'consumable', grade: 'common', nameKey: 'items.c_antidote.name', descKey: 'items.c_antidote.desc', emoji: '🧪',
+        effect: 'cure_poison', stackable: true, maxStack: 99, price: 150,
     },
     c_herb: {
-        id: 'c_herb', type: 'consumable', name: '약초', emoji: '🌿',
-        desc: '체력 회복 (+30 HP)',
-        effect: 'heal', value: 30, stackable: true,
+        id: 'c_herb', type: 'consumable', grade: 'common', nameKey: 'items.c_herb.name', descKey: 'items.c_herb.desc', emoji: '🌿',
+        effect: 'heal', value: 30, stackable: true, maxStack: 99, price: 100,
     },
     c_elixir: {
-        id: 'c_elixir', type: 'consumable', name: '엘릭서', emoji: '✨',
-        desc: 'HP/Sanity 완전 회복 + 상태이상 제거',
-        effect: 'full_restore', stackable: true,
+        id: 'c_elixir', type: 'consumable', grade: 'rare', nameKey: 'items.c_elixir.name', descKey: 'items.c_elixir.desc', emoji: '✨',
+        effect: 'full_restore', stackable: true, maxStack: 99, price: 1000,
+    },
+    c_mega_potion: {
+        id: 'c_mega_potion', type: 'consumable', grade: 'magic', nameKey: 'items.c_mega_potion.name', descKey: 'items.c_mega_potion.desc', emoji: '🫙',
+        effect: 'heal', value: 70, stackable: true, maxStack: 99, price: 400,
+    },
+    c_sanity_brew: {
+        id: 'c_sanity_brew', type: 'consumable', grade: 'uncommon', nameKey: 'items.c_sanity_brew.name', descKey: 'items.c_sanity_brew.desc', emoji: '🍵',
+        effect: 'sanity_restore', value: 50, stackable: true, maxStack: 99, price: 300,
+    },
+    c_rage_tonic: {
+        id: 'c_rage_tonic', type: 'consumable', grade: 'magic', nameKey: 'items.c_rage_tonic.name', descKey: 'items.c_rage_tonic.desc', emoji: '🔴',
+        effect: 'str_boost', value: 5, duration: 3, stackable: true, maxStack: 30, price: 350,
+    },
+    c_stone_skin: {
+        id: 'c_stone_skin', type: 'consumable', grade: 'magic', nameKey: 'items.c_stone_skin.name', descKey: 'items.c_stone_skin.desc', emoji: '🪨',
+        effect: 'def_boost', value: 5, duration: 3, stackable: true, maxStack: 30, price: 350,
+    },
+    c_ghost_step: {
+        id: 'c_ghost_step', type: 'consumable', grade: 'rare', nameKey: 'items.c_ghost_step.name', descKey: 'items.c_ghost_step.desc', emoji: '👻',
+        effect: 'spd_boost', value: 8, duration: 3, stackable: true, maxStack: 20, price: 600,
     },
     // ── Materials ──
     mat_wood: {
-        id: 'mat_wood', type: 'material', name: '나무/막대기', emoji: '🪵',
-        desc: '기본적인 목재', stackable: true,
+        id: 'mat_wood', type: 'material', grade: 'common', nameKey: 'items.mat_wood.name', descKey: 'items.mat_wood.desc', emoji: '🪵',
+        stackable: true, maxStack: 99, price: 30,
     },
     mat_iron_ore: {
-        id: 'mat_iron_ore', type: 'material', name: '철광석', emoji: '🪨',
-        desc: '가장 기초적인 금속 재료', stackable: true,
+        id: 'mat_iron_ore', type: 'material', grade: 'common', nameKey: 'items.mat_iron_ore.name', descKey: 'items.mat_iron_ore.desc', emoji: '🪨',
+        stackable: true, maxStack: 99, price: 50,
     },
     mat_iron_stud: {
-        id: 'mat_iron_stud', type: 'material', name: '철 징', emoji: '📌',
-        desc: '방패나 둔기에 박아 파괴력을 높이는 쇠못', stackable: true,
+        id: 'mat_iron_stud', type: 'material', grade: 'common', nameKey: 'items.mat_iron_stud.name', descKey: 'items.mat_iron_stud.desc', emoji: '📌',
+        stackable: true, maxStack: 99, price: 80,
     },
     mat_leather_strap: {
-        id: 'mat_leather_strap', type: 'material', name: '가죽끈', emoji: '🧵',
-        desc: '기본적인 손잡이 마감이나 결속용 재료', stackable: true,
+        id: 'mat_leather_strap', type: 'material', grade: 'common', nameKey: 'items.mat_leather_strap.name', descKey: 'items.mat_leather_strap.desc', emoji: '🧵',
+        stackable: true, maxStack: 99, price: 60,
     },
     mat_sticky_sap: {
-        id: 'mat_sticky_sap', type: 'material', name: '접착용 수액', emoji: '🍯',
-        desc: '부품을 고정하는 천연 접착제', stackable: true,
+        id: 'mat_sticky_sap', type: 'material', grade: 'common', nameKey: 'items.mat_sticky_sap.name', descKey: 'items.mat_sticky_sap.desc', emoji: '🍯',
+        stackable: true, maxStack: 99, price: 70,
     },
     mat_sharp_blade: {
-        id: 'mat_sharp_blade', type: 'material', name: '날카로운 칼날', emoji: '🔪',
-        desc: '철광석을 가공해 만든 기본 날붙이', stackable: true,
+        id: 'mat_sharp_blade', type: 'material', grade: 'uncommon', nameKey: 'items.mat_sharp_blade.name', descKey: 'items.mat_sharp_blade.desc', emoji: '🔪',
+        stackable: true, maxStack: 99, price: 300,
     },
     mat_steel_part: {
-        id: 'mat_steel_part', type: 'material', name: '강철 부품', emoji: '⚙️',
-        desc: '정교한 무기를 만들기 위한 제련된 강철', stackable: true,
+        id: 'mat_steel_part', type: 'material', grade: 'uncommon', nameKey: 'items.mat_steel_part.name', descKey: 'items.mat_steel_part.desc', emoji: '⚙️',
+        stackable: true, maxStack: 99, price: 400,
     },
     mat_beast_tendon: {
-        id: 'mat_beast_tendon', type: 'material', name: '마수의 힘줄', emoji: '🪢',
-        desc: '무기의 탄성을 높이거나 부품을 잇는 질긴 끈', stackable: true,
+        id: 'mat_beast_tendon', type: 'material', grade: 'uncommon', nameKey: 'items.mat_beast_tendon.name', descKey: 'items.mat_beast_tendon.desc', emoji: '🪢',
+        stackable: true, maxStack: 99, price: 120,
     },
     mat_mana_stone: {
-        id: 'mat_mana_stone', type: 'material', name: '마나석', emoji: '💎',
-        desc: '마법적인 힘을 공급하는 희귀 광석', stackable: true,
+        id: 'mat_mana_stone', type: 'material', grade: 'magic', nameKey: 'items.mat_mana_stone.name', descKey: 'items.mat_mana_stone.desc', emoji: '💎',
+        stackable: true, maxStack: 99, price: 500,
     },
     mat_rune: {
-        id: 'mat_rune', type: 'material', name: '룬', emoji: '🔮',
-        desc: '속성 공격 및 마법 부여 재료', stackable: true,
+        id: 'mat_rune', type: 'material', grade: 'magic', nameKey: 'items.mat_rune.name', descKey: 'items.mat_rune.desc', emoji: '🔮',
+        stackable: true, maxStack: 99, price: 600,
     },
     mat_mana_heart: {
-        id: 'mat_mana_heart', type: 'material', name: '마력의 심장', emoji: '❤️‍🔥',
-        desc: '무기에 생명을 불어넣는 최상위 마법 재료', stackable: true,
+        id: 'mat_mana_heart', type: 'material', grade: 'rare', nameKey: 'items.mat_mana_heart.name', descKey: 'items.mat_mana_heart.desc', emoji: '❤️‍🔥',
+        stackable: true, maxStack: 99, price: 1500,
     },
+    mat_dragon_scale: {
+        id: 'mat_dragon_scale', type: 'material', grade: 'epic', nameKey: 'items.mat_dragon_scale.name', descKey: 'items.mat_dragon_scale.desc', emoji: '🐉',
+        stackable: true, maxStack: 99, price: 3000,
+    },
+    mat_ancient_crystal: {
+        id: 'mat_ancient_crystal', type: 'material', grade: 'legendary', nameKey: 'items.mat_ancient_crystal.name', descKey: 'items.mat_ancient_crystal.desc', emoji: '🔯',
+        stackable: true, maxStack: 99, price: 8000,
+    },
+    // ── Equipment (Armor/Accessory) — legacy entries kept for save compat ──
+    eq_leather_armor: {
+        id: 'eq_leather_armor', type: 'armor', grade: 'common', nameKey: 'items.eq_leather_armor.name', descKey: 'items.eq_leather_armor.desc', emoji: '👕',
+        def: 2, stackable: false, maxStack: 1, price: 200,
+    },
+    eq_iron_ring: {
+        id: 'eq_iron_ring', type: 'accessory', grade: 'common', nameKey: 'items.eq_iron_ring.name', descKey: 'items.eq_iron_ring.desc', emoji: '💍',
+        str: 1, stackable: false, maxStack: 1, price: 150,
+    },
+    // ── Gacha Tickets ──
+    i_ticket_silver: {
+        id: 'i_ticket_silver', type: 'ticket', grade: 'uncommon', nameKey: 'items.i_ticket_silver.name', descKey: 'items.i_ticket_silver.desc', emoji: '🎫',
+        stackable: true, maxStack: 99, price: 0,
+    },
+    i_ticket_gold: {
+        id: 'i_ticket_gold', type: 'ticket', grade: 'rare', nameKey: 'items.i_ticket_gold.name', descKey: 'items.i_ticket_gold.desc', emoji: '🎟️',
+        stackable: true, maxStack: 99, price: 0,
+    },
+    // ── Recipes ──
+    rcp_w_oak_club: { id: 'rcp_w_oak_club', type: 'consumable', grade: 'common', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_oak_club.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 100 },
+    rcp_w_rusty_dagger: { id: 'rcp_w_rusty_dagger', type: 'consumable', grade: 'common', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_rusty_dagger.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 100 },
+    rcp_w_battle_staff: { id: 'rcp_w_battle_staff', type: 'consumable', grade: 'common', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_battle_staff.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 200 },
+    rcp_w_clock_axe: { id: 'rcp_w_clock_axe', type: 'consumable', grade: 'uncommon', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_clock_axe.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 250 },
+    rcp_w_hunter_bow: { id: 'rcp_w_hunter_bow', type: 'consumable', grade: 'uncommon', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_hunter_bow.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 200 },
+
+    rcp_w_mithril_glaive: { id: 'rcp_w_mithril_glaive', type: 'consumable', grade: 'rare', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_mithril_glaive.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 500 },
+    rcp_w_magic_sword: { id: 'rcp_w_magic_sword', type: 'consumable', grade: 'rare', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_magic_sword.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 600 },
+    rcp_w_blood_scythe: { id: 'rcp_w_blood_scythe', type: 'consumable', grade: 'rare', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_blood_scythe.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 550 },
+    rcp_w_rune_spear: { id: 'rcp_w_rune_spear', type: 'consumable', grade: 'rare', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_rune_spear.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 700 },
+    rcp_w_war_hammer: { id: 'rcp_w_war_hammer', type: 'consumable', grade: 'rare', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_war_hammer.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 650 },
+    rcp_w_execution_axe: { id: 'rcp_w_execution_axe', type: 'consumable', grade: 'epic', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_execution_axe.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 800 },
+
+    rcp_w_gale_gauntlet: { id: 'rcp_w_gale_gauntlet', type: 'consumable', grade: 'epic', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_gale_gauntlet.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 1000 },
+    rcp_w_berserk_axe: { id: 'rcp_w_berserk_axe', type: 'consumable', grade: 'legendary', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_berserk_axe.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 1200 },
+    rcp_w_assassin_katar: { id: 'rcp_w_assassin_katar', type: 'consumable', grade: 'legendary', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_assassin_katar.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 1500 },
+    rcp_w_thunder_mace: { id: 'rcp_w_thunder_mace', type: 'consumable', grade: 'legendary', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_thunder_mace.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 1100 },
+    rcp_w_dragon_slayer: { id: 'rcp_w_dragon_slayer', type: 'consumable', grade: 'legendary', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_dragon_slayer.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 2000 },
 };
 
 // ─── Treasure Chest Loot Tables ───
@@ -143,12 +200,12 @@ export function rollChestLoot() {
 // ─── Random Events ───
 
 export const EVENTS = [
-    { id: 'heal_spring', name: '치유의 샘', emoji: '⛲', desc: 'HP +20 회복', effect: 'heal', value: 20 },
-    { id: 'sanity_shrine', name: '정신의 성소', emoji: '🕯️', desc: '정신력 +15 회복', effect: 'sanity_restore', value: 15 },
-    { id: 'trap_pit', name: '함정!', emoji: '🕳️', desc: 'HP -10, 정신력 -5', effect: 'trap', hpDmg: 10, sanityDmg: 5 },
-    { id: 'dark_corner', name: '어둠의 구석', emoji: '🌑', desc: '정신력 -5', effect: 'sanity_drain', value: 5 },
-    { id: 'treasure_stash', name: '숨겨진 보급품', emoji: '🎁', desc: '랜덤 아이템 획득', effect: 'random_item' },
-    { id: 'rest_spot', name: '쉬어가는 곳', emoji: '🏕️', desc: 'HP +10, 정신력 +10', effect: 'rest', hpVal: 10, sanityVal: 10 },
+    { id: 'heal_spring', nameKey: 'events.heal_spring.name', descKey: 'events.heal_spring.desc', name: '치유의 샘', emoji: '⛲', desc: 'HP +20 회복', effect: 'heal', value: 20 },
+    { id: 'sanity_shrine', nameKey: 'events.sanity_shrine.name', descKey: 'events.sanity_shrine.desc', name: '정신의 성소', emoji: '🕯️', desc: '정신력 +15 회복', effect: 'sanity_restore', value: 15 },
+    { id: 'trap_pit', nameKey: 'events.trap_pit.name', descKey: 'events.trap_pit.desc', name: '함정!', emoji: '🕳️', desc: 'HP -10, 정신력 -5', effect: 'trap', hpDmg: 10, sanityDmg: 5 },
+    { id: 'dark_corner', nameKey: 'events.dark_corner.name', descKey: 'events.dark_corner.desc', name: '어둠의 구석', emoji: '🌑', desc: '정신력 -5', effect: 'sanity_drain', value: 5 },
+    { id: 'treasure_stash', nameKey: 'events.treasure_stash.name', descKey: 'events.treasure_stash.desc', name: '숨겨진 보급품', emoji: '🎁', desc: '랜덤 아이템 획득', effect: 'random_item' },
+    { id: 'rest_spot', nameKey: 'events.rest_spot.name', descKey: 'events.rest_spot.desc', name: '쉬어가는 곳', emoji: '🏕️', desc: 'HP +10, 정신력 +10', effect: 'rest', hpVal: 10, sanityVal: 10 },
 ];
 
 /**

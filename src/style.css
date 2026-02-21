@@ -16,6 +16,9 @@
   --gold: #d4a843;
   --gold-bright: #f0c850;
   --gold-dim: #8a7230;
+  --diamond: #e55c5c;
+  --diamond-bright: #ff7575;
+  --diamond-dim: #993d3d;
 
   --purple: #9370db;
   --purple-bright: #b490ff;
@@ -310,6 +313,39 @@ button {
   border-bottom-color: var(--gold);
 }
 
+/* Shop Sub Tabs */
+.shop-subtabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  padding: 0 10px;
+}
+
+.btn-shop-tab {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 2px solid transparent;
+}
+
+.btn-shop-tab:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.btn-shop-tab.active {
+  color: var(--gold);
+  background: var(--bg-card);
+  border-bottom-color: var(--gold);
+}
+
 /* Currency Bar */
 .town-currency-bar {
   display: flex;
@@ -332,9 +368,14 @@ button {
 
 .gold .currency-value {
   color: var(--gold);
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 15px;
+}
+
+.diamond .currency-icon {
+  text-shadow: 0 0 5px var(--diamond);
+}
+
+.diamond .currency-value {
+  color: var(--diamond);
 }
 
 /* Refresh Banner (Unified) */
@@ -454,6 +495,78 @@ button {
   text-align: left;
   line-height: 1.8;
   color: var(--text-dim);
+}
+
+/* ─── Settings Row Layout ─── */
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 16px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.settings-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--font-title);
+}
+
+.settings-value {
+  width: 200px;
+  /* Fixed width for the input/select */
+}
+
+/* ─── Gothic Select (Combo Box) ─── */
+
+/* ─── Gothic Select (Combo Box) ─── */
+.gothic-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1px;
+  cursor: pointer;
+
+  background: linear-gradient(180deg, #1a1a2e 0%, #0a0a0f 100%);
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(212, 168, 67, 0.05);
+  transition: all 0.3s ease;
+
+  /* Custom Arrow */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d4a843' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1em;
+}
+
+.gothic-select:hover {
+  border-color: var(--gold-bright);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(212, 168, 67, 0.2);
+}
+
+.gothic-select:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(212, 168, 67, 0.3);
+}
+
+.gothic-select option {
+  background: var(--bg-dark);
+  color: var(--text);
+  padding: 8px;
 }
 
 .castle-welcome {
@@ -913,12 +1026,16 @@ button {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  transition: border-color 0.2s;
+  justify-content: space-between;
+  gap: 8px;
+  transition: border-color 0.2s, transform 0.2s;
+  position: relative;
+  height: 220px;
 }
 
 .shop-item-card:hover {
   border-color: var(--purple-bright);
+  transform: translateY(-2px);
 }
 
 .shop-item-card.bought {
@@ -926,27 +1043,75 @@ button {
   filter: grayscale(0.5);
 }
 
-.item-visual {
-  font-size: 40px;
+.shop-item-visual {
+  font-size: 48px;
   text-align: center;
-  padding: 20px;
-  background: var(--bg-dark);
-  border-radius: var(--radius);
+  padding: 10px 0;
 }
 
-.item-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.item-name {
+.shop-item-name {
   font-weight: 700;
-  color: var(--gold);
+  text-align: center;
+  font-size: 1.1em;
+  flex-grow: 1;
 }
 
-.item-price {
-  font-size: 13px;
+.shop-item-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(20, 16, 26, 0.95);
+  border: 1px solid var(--border-glow);
+  padding: 14px;
+  border-radius: var(--radius);
+  width: 240px;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.shop-item-card:hover .shop-item-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.shop-item-tooltip .tooltip-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.shop-item-tooltip .tooltip-desc {
+  font-size: 0.9em;
   color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.shop-item-tooltip .tooltip-stat {
+  font-size: 0.85em;
+  color: var(--gold);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 10px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.shop-item-buy {
+  width: 100%;
+}
+
+.shop-item-buy button {
+  width: 100%;
+  padding: 12px 0;
+  font-weight: bold;
 }
 
 .shop-slot.locked {
@@ -1195,6 +1360,252 @@ button {
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
+}
+
+/* ─── Phase 13 Wanderer Expansion Styles ─── */
+
+.char-name-lv {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.char-lv {
+  font-size: 12px;
+  color: var(--gold);
+  background: rgba(212, 168, 67, 0.15);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 800;
+}
+
+.char-class-line {
+  margin-top: 2px;
+}
+
+/* Progress Bars (HP, SAN, EXP) */
+.char-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.bar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 0 2px;
+}
+
+.bar-container {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.bar-container.hp .bar-fill {
+  background: linear-gradient(90deg, #a52a2a, #ff4d4d);
+}
+
+.bar-container.san .bar-fill {
+  background: linear-gradient(90deg, #483d8b, #9370db);
+}
+
+.bar-container.exp .bar-fill {
+  background: linear-gradient(90deg, #d4a843, #fff4d0);
+}
+
+/* Stat Allocation */
+.stat-item {
+  position: relative;
+}
+
+.btn-stat-inc {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  background: var(--gold);
+  color: var(--bg-dark);
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.btn-stat-inc:hover {
+  transform: scale(1.1);
+  filter: brightness(1.1);
+}
+
+/* Equipment Slots */
+.char-equipments {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.equip-slot {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.equip-slot:hover {
+  border-color: var(--gold-faint);
+  background: rgba(212, 168, 67, 0.05);
+}
+
+.equip-label {
+  font-size: 16px;
+}
+
+.equip-name {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+/* Modal Overlay & Content */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  padding: 24px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: var(--gold);
+}
+
+.btn-close-modal {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.selector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.selector-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  transition: border-color 0.2s;
+}
+
+.selector-item:hover {
+  border-color: var(--gold-faint);
+}
+
+.selector-item .item-emoji {
+  font-size: 28px;
+}
+
+.selector-item .item-info {
+  flex: 1;
+}
+
+.selector-item .item-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--gold);
+}
+
+.selector-item .item-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.unequip-action {
+  margin-top: 8px;
+  justify-content: center;
+  background: none;
+  border: none;
+}
+
+.btn-unequip-action {
+  width: 100%;
+  padding: 10px;
 }
 
 .btn-admin:hover {
@@ -1472,7 +1883,7 @@ button {
 
 .dungeon-scroll-area {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: hidden;
   padding: 0 20px 20px;
 }
 
@@ -2048,6 +2459,94 @@ button {
 }
 
 /* Spawn result dice */
+/* ─── Premium Modal Buttons ─── */
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: row;
+  gap: 16px;
+  margin-top: 24px;
+  width: 100%;
+}
+
+/* Inherit base dimensions/fonts from btn-town-primary via generic commonalities if we could, 
+   but for now we replicate the 'feel' explicitly. */
+
+.btn-town-cancel {
+  border-radius: 4px;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  position: relative;
+  overflow: hidden;
+
+  /* Neutral/Iron Style */
+  background: linear-gradient(180deg, #2a2a3a 0%, #151520 100%);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.02);
+}
+
+.btn-town-cancel:hover {
+  transform: translateY(-2px);
+  border-color: var(--text-muted);
+  color: var(--text);
+  background: linear-gradient(180deg, #353545 0%, #1a1a25 100%);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.05);
+}
+
+.btn-town-cancel:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.4);
+}
+
+/* Red/Danger Premium Style (Refining existing if needed) */
+.btn-town-secondary {
+  /* Copying base transparency/layout from Primary */
+  border-radius: 4px;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  position: relative;
+  overflow: hidden;
+
+  /* Crimson/Danger Style */
+  background: linear-gradient(180deg, #2a0a0a 0%, #150505 100%);
+  border: 1px solid rgba(224, 64, 80, 0.4);
+  color: var(--red);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(224, 64, 80, 0.1);
+}
+
+.btn-town-secondary:hover {
+  transform: translateY(-2px);
+  border-color: var(--red);
+  color: #ff6070;
+  background: linear-gradient(180deg, #3a1a1a 0%, #200a0a 100%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(224, 64, 80, 0.3), inset 0 0 15px rgba(224, 64, 80, 0.15);
+}
+
+.btn-town-secondary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0, 0, 0, 0.6);
+}
+
 .dice-results {
   display: flex;
   justify-content: center;
@@ -2109,6 +2608,16 @@ button {
 .btn-next-wave {
   background: linear-gradient(135deg, var(--green), #3daa60) !important;
   color: var(--bg-darkest) !important;
+}
+
+/* ─── Confirm Modal ─── */
+.confirm-modal {
+  text-align: center;
+  width: 400px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* Action hint */
@@ -2318,6 +2827,131 @@ button {
   align-items: center;
   justify-content: center;
 }
+
+/* ─── Multi-Enemy Bowling Pin Arena ─── */
+.combat-monsters-arena {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 12px 0;
+  min-height: 120px;
+}
+
+.monster-card:nth-child(odd) {
+  transform: translateY(0px);
+}
+
+.monster-card:nth-child(even) {
+  transform: translateY(-14px);
+}
+
+.monster-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(30, 15, 15, 0.7);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  position: relative;
+  min-width: 90px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.monster-card:hover:not(.monster-dead) {
+  border-color: var(--red);
+  box-shadow: 0 0 12px rgba(224, 64, 80, 0.3);
+}
+
+.monster-card.monster-selected {
+  border-color: #ffd700;
+  box-shadow: 0 0 18px rgba(255, 215, 0, 0.4);
+}
+
+.monster-card.monster-dead {
+  opacity: 0.4;
+  filter: grayscale(1);
+  cursor: default;
+  pointer-events: none;
+}
+
+.monster-card-emoji {
+  font-size: 36px;
+}
+
+.monster-card-name {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.monster-card-hp-bar {
+  width: 80px;
+  height: 6px;
+  background: var(--bg-panel);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.monster-card-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c03040, #e04050);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.monster-card-hp-text {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.monster-dead-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius);
+}
+
+.summon-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--gold);
+  color: #000;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-weight: bold;
+}
+
+.monsters-acting .monster-card:not(.monster-dead) {
+  animation: monsterPulse 0.5s ease-in-out;
+}
+
+@keyframes monsterPulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+}
+
 
 .combat-action-section {
   text-align: center;
@@ -2775,7 +3409,36 @@ button {
   background: rgba(80, 144, 224, 0.1);
   padding: 4px 8px;
   border-radius: 4px;
+  margin-top: 4px;
   display: inline-block;
+}
+
+/* Storage Panel Header */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex: 1;
+}
+
+.storage-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.storage-controls .btn-town-secondary {
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .slot-qty {
@@ -3020,6 +3683,20 @@ button {
     opacity: 1;
   }
 }
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+
 
 /* ══════════════════════════════════════════════════
    CRAFTING OVERLAY
@@ -3266,6 +3943,151 @@ button {
   color: #c9a0dc;
   border-color: rgba(201, 160, 220, 0.5);
   background: rgba(201, 160, 220, 0.1);
+}
+
+.status-badge.status-bleed {
+  color: #ff4060;
+  border-color: rgba(255, 64, 96, 0.5);
+  background: rgba(255, 64, 96, 0.1);
+}
+
+.status-badge.status-regen {
+  color: #4dff91;
+  border-color: rgba(77, 255, 145, 0.5);
+  background: rgba(77, 255, 145, 0.1);
+}
+
+.status-badge.status-cursed {
+  color: #9900cc;
+  border-color: rgba(153, 0, 204, 0.5);
+  background: rgba(153, 0, 204, 0.12);
+}
+
+.status-badge.status-blessed {
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.status-badge.status-crippled,
+.status-badge.status-frostbite {
+  color: #a0c4ff;
+  border-color: rgba(160, 196, 255, 0.5);
+  background: rgba(160, 196, 255, 0.1);
+}
+
+.status-badge.status-doom {
+  color: #c9c9c9;
+  border-color: rgba(80, 80, 80, 0.7);
+  background: rgba(30, 30, 30, 0.6);
+}
+
+.status-badge.status-daze {
+  color: #ffe680;
+  border-color: rgba(255, 230, 128, 0.5);
+  background: rgba(255, 230, 128, 0.1);
+}
+
+/* ─── Interactive Event Overlay ─── */
+.event-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 9980;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.event-modal {
+  background: var(--bg-panel, #1a1a2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 16px;
+  padding: 28px 32px;
+  max-width: 480px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.event-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.event-emoji {
+  font-size: 2.2em;
+}
+
+.event-title {
+  font-size: 1.2em;
+  font-weight: 700;
+  margin: 0;
+}
+
+.event-desc {
+  color: var(--text-dim, #aaa);
+  font-size: 0.95em;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.event-choices {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+  width: 100%;
+}
+
+.btn-event-choice {
+  background: var(--bg-dark, #222);
+  border: 1px solid var(--border, #444);
+  color: var(--text-main, #eee);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 80px;
+  min-width: 120px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  word-break: keep-all;
+}
+
+.btn-event-choice:hover:not(:disabled) {
+  background: var(--bg-lighter, #333);
+  border-color: var(--gold, #d4a843);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-event-choice.disabled,
+.btn-event-choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.event-choice-label {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--gold-light, #fce293);
+  margin-bottom: 4px;
+}
+
+.event-choice-req {
+  font-size: 12px;
+  color: #ff6b6b;
+  margin-top: 4px;
 }
 
 @keyframes status-pulse {
@@ -3760,4 +4582,631 @@ button {
     width: 90%;
     padding: 16px;
   }
+}
+
+/* ─── Blacksmith ─── */
+.blacksmith-panel .recipe-list {
+  margin-top: 20px;
+}
+
+.recipe-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recipe-materials {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.material-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.material-item.needed {
+  color: var(--text-muted);
+}
+
+.material-item.met {
+  color: var(--gold-bright);
+}
+
+.recipe-card.locked {
+  opacity: 0.7;
+}
+
+/* ─── Sort Order Modal ─── */
+.sort-order-modal {
+  max-width: 320px;
+}
+
+.sort-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 15px 0;
+}
+
+.sort-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10px 15px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: grab;
+  transition: all 0.2s;
+}
+
+.sort-item:hover {
+  border-color: var(--gold-faint);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sort-item.dragging {
+  opacity: 0.5;
+  background: var(--purple-dim);
+}
+
+.drag-handle {
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.sort-order-modal .modal-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.modal-footer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+/* ─── Equipment Slot Polish ─── */
+.equip-slot.equipped {
+  border-color: var(--gold-bright);
+  box-shadow: 0 0 8px rgba(212, 168, 67, 0.3);
+}
+
+.equip-slot.equipped .slot-emoji {
+  filter: drop-shadow(0 0 4px var(--gold));
+}
+
+/* ─── Blacksmith Row Layout ─── */
+
+.filter-controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.filter-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.filter-controls input[type="checkbox"] {
+  accent-color: var(--gold);
+  width: 16px;
+  height: 16px;
+}
+
+.recipe-list.row-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recipe-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.recipe-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-bright);
+}
+
+.recipe-row.locked {
+  background: rgba(20, 20, 20, 0.6);
+  border-color: #444;
+  opacity: 0.8;
+}
+
+.recipe-row.craftable {
+  border-color: var(--gold);
+  background: rgba(212, 168, 67, 0.05);
+  box-shadow: 0 0 10px rgba(212, 168, 67, 0.1);
+}
+
+/* Row Info Section */
+.row-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 200px;
+  /* Fixed width for alignment */
+}
+
+.row-info .item-emoji {
+  font-size: 28px;
+  background: rgba(0, 0, 0, 0.3);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.row-info .info-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.row-info .item-name {
+  font-weight: bold;
+  font-size: 14px;
+  color: var(--text-highlight);
+}
+
+.row-info .item-grade {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* Row Materials / Reqs */
+.row-mats,
+.row-reqs {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.mat-item,
+.row-reqs span {
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.mat-item.met,
+.row-reqs span.met {
+  color: #aaddaa;
+  border-color: #4c994c;
+}
+
+.mat-item.needed,
+.row-reqs span.needed {
+  color: #ddaaaa;
+  border-color: #994c4c;
+}
+
+/* Row Action */
+.row-action {
+  width: 100px;
+  /* Fixed width button area */
+  display: flex;
+  justify-content: flex-end;
+}
+
+.row-action button {
+  width: 100%;
+  padding: 8px 0;
+}
+
+.recipe-row.locked .item-emoji {
+  filter: grayscale(100%);
+}
+
+/* ─── Toast Notification ─── */
+.toast-message {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--gold);
+  font-size: 14px;
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+/* ─── Compact Wanderer UI ─── */
+.wanderer-list.compact-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 600px;
+  padding-right: 4px;
+}
+
+.wanderer-row {
+  display: grid;
+  grid-template-columns: 140px 100px 1fr 100px 40px;
+  /* Identity | Bars | Stats | Equip | Action */
+  gap: 12px;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  transition: all 0.2s;
+}
+
+.wanderer-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-glow);
+}
+
+/* 1. Identity Column */
+.w-col-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.w-portrait {
+  width: 36px;
+  height: 36px;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.w-portrait.tier-1 {
+  border-color: #a0a0a0;
+}
+
+.w-portrait.tier-2 {
+  border-color: #4488ff;
+}
+
+.w-portrait.tier-3 {
+  border-color: #aa44ff;
+}
+
+.w-portrait.tier-4 {
+  border-color: #ffaa00;
+}
+
+.w-portrait.tier-5 {
+  border-color: #ff4444;
+}
+
+.w-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.w-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.w-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-highlight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
+.w-lv {
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.w-class {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* 2. Bars Column */
+.w-col-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+}
+
+.w-bar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.w-bar-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.w-bar-track {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.w-bar-fill {
+  height: 100%;
+}
+
+.w-bar-fill.hp {
+  background: var(--red);
+}
+
+.w-bar-fill.san {
+  background: var(--blue);
+}
+
+.w-bar-fill.exp {
+  background: var(--gold);
+}
+
+/* 3. Stats Column */
+.w-col-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px 8px;
+  position: relative;
+}
+
+.w-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.w-stat-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  width: 20px;
+}
+
+.w-stat-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.btn-stat-inc-mini {
+  width: 14px;
+  height: 14px;
+  font-size: 10px;
+  padding: 0;
+  line-height: 1;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.stat-points-avail {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--red);
+  color: #fff;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 1px 4px;
+  border-radius: 8px;
+  animation: pulse 2s infinite;
+}
+
+/* 4. Equip Column */
+.w-col-equip {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.w-equip-slot {
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.w-equip-slot:hover {
+  border-color: var(--gold);
+  background: rgba(212, 168, 67, 0.1);
+}
+
+.w-equip-slot.equipped {
+  border-color: var(--gold-dim);
+  box-shadow: 0 0 4px rgba(212, 168, 67, 0.2);
+}
+
+/* 5. Action Column */
+.w-col-action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-dismiss-mini {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  opacity: 0.5;
+}
+
+.btn-dismiss-mini:hover {
+  opacity: 1;
+  background: rgba(255, 0, 0, 0.1);
+  border-color: var(--red);
+}
+
+.btn-bury-mini {
+  height: 28px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(220, 53, 69, 0.15);
+  border: 1px solid rgba(220, 53, 69, 0.4);
+  color: #ff6070;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-title);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-bury-mini:hover {
+  background: rgba(220, 53, 69, 0.35);
+  border-color: var(--red);
+  color: #ffffff;
+}
+
+/* ─── Dungeon Board Centering ─── */
+.dungeon-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+}
+
+.board-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
+}
+
+/* ─── ATB Tick Bars ─── */
+.atb-tick-bar {
+  position: relative;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.atb-tick-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f0c040, #f97b22);
+  border-radius: 4px;
+  transition: width 0.25s ease;
+}
+
+.player-tick-bar {
+  margin-top: 6px;
+}
+
+.player-tick {
+  background: linear-gradient(90deg, #40c0f0, #22a6f9);
+}
+
+.atb-tick-text {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  color: #fff;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* ─── Equip Stat Requirements ─── */
+.item-req-stats {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.req-stat {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.req-stat.met {
+  background: rgba(74, 200, 100, 0.2);
+  color: #4ac864;
+  border: 1px solid rgba(74, 200, 100, 0.4);
+}
+
+.req-stat.unmet {
+  background: rgba(220, 60, 60, 0.2);
+  color: #e05555;
+  border: 1px solid rgba(220, 60, 60, 0.4);
+}
+
+.selector-item.req-not-met {
+  opacity: 0.65;
+  background: rgba(220, 60, 60, 0.05);
+}
+
+.selector-item.req-not-met .btn-equip-action:disabled {
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.5;
 }

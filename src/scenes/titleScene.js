@@ -1,5 +1,6 @@
 // ─── Title Scene (시작씬) ───
 import { changeScene } from '../sceneManager.js';
+import { t } from '../i18n.js';
 
 export function mount(container) {
   container.innerHTML = `
@@ -8,14 +9,14 @@ export function mount(container) {
       <div class="title-content">
         <div class="title-logo">
           <div class="title-icon">⚔️</div>
-          <h1 class="title-name">Round to Dungeon</h1>
-          <p class="title-subtitle">운명의 던전에 발을 들여라</p>
+          <h1 class="title-name">${t('app.title')}</h1>
+          <p class="title-subtitle">${t('app.subtitle')}</p>
         </div>
         <button class="btn-start" id="btnStart">
-          <span class="btn-start-text">게임 시작</span>
+          <span class="btn-start-text">${t('ui.action.game_start')}</span>
           <span class="btn-start-glow"></span>
         </button>
-        <p class="title-hint">Press to begin your adventure</p>
+        <p class="title-hint">${t('app.hint')}</p>
       </div>
     </div>
   `;

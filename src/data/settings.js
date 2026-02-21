@@ -1,4 +1,13 @@
 export const SETTINGS = {
+    // Initial Account State
+    initialGold: 1000,
+    initialDiamonds: 0,
+    initialStorageSlots: 30,
+    initialItems: [
+        { id: "i_herb", qty: 5 },
+        { id: "w_rusty_sword", qty: 1 }
+    ],
+
     // Movement
     hpRegenPerTile: 1,      // HP recovered per tile moved
     sanityCostPerMove: 2,   // Sanity lost per move roll (not per tile)
@@ -9,6 +18,8 @@ export const SETTINGS = {
         body: 100,
         legs: 75
     },
+    partBonus: { head: -20, body: 10, legs: 0 },
+    partMult: { head: 2.0, body: 1.0, legs: 1.2 },
 
     // Inventory
     inventorySlots: 12,
@@ -17,7 +28,36 @@ export const SETTINGS = {
 
     // Stats
     maxSanity: 100,
+    statNames: {
+        str: "STR", agi: "AGI", spd: "SPD", dex: "DEX", vit: "VIT", luk: "LUK"
+    },
     initialSanity: 100,
+    wandererRecruitCost: 500,
+
+    // Daily Reset time in UTC hour (e.g., 0 = midnight UTC)
+    dailyResetTimeUTC: 0,
+
+    // Base limits
+    baseWandererLimit: 4,
+
+    // Roster
+    maxWandererCap: 10,
+    rosterExpandCost: 50, // diamonds
+
+    // Premium features
+    maxDailyRefreshes: 10,          // Used by guild
+    maxShopRefreshesConsumable: 10, // Used by consumable shop
+    maxShopRefreshesEquipment: 10,  // Used by equipment shop
+    guildRefreshCostDiamond: 10,
+    shopRefreshCostDiamond: 10,
+    storageExpandCostDiamond: 50,
+
+    // Gacha
+    gachaCostSingleG: 100,        // Gold cost for 1 Draw (fallback if no Silver Ticket)
+    gachaCostMultiG: 1000,        // Gold cost for 10+1 Draw (fallback if no tickets)
+    ticketSilverId: 'i_ticket_silver',
+    ticketGoldId: 'i_ticket_gold',
+    gachaMultiGuaranteedGrade: 'rare', // Minimum grade guaranteed in 10+1
 
     // Map
     baseMapSize: 5,

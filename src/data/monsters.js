@@ -3,7 +3,7 @@
 
 export const MONSTERS = {
     m_summoner: {
-        id: 'm_summoner', name: '소환술사', nameEn: 'Summoner', emoji: '🧙‍♂️',
+        id: 'm_summoner', name: '소환술사', nameKey: 'monsters.m_summoner.name', emoji: '🧙‍♂️',
         lv: 1, hp: 15, atk: 3, spd: 4, eva: 5, def: 0,
         growth: { hp: 0.15, atk: 0.1, eva: 0.5, def: 0 },
         parts: { head: true, body: true, legs: true },
@@ -13,7 +13,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_goblin: {
-        id: 'm_goblin', name: '고블린', nameEn: 'Goblin', emoji: '👺',
+        id: 'm_goblin', name: '고블린', nameKey: 'monsters.m_goblin.name', emoji: '👺',
         lv: 1, hp: 18, atk: 4, spd: 5, eva: 5, def: 0,
         growth: { hp: 0.15, atk: 0.1, eva: 0.5, def: 0 },
         parts: { head: true, body: true, legs: true },
@@ -23,7 +23,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_bat: {
-        id: 'm_bat', name: '박쥐', nameEn: 'Bat', emoji: '🦇',
+        id: 'm_bat', name: '박쥐', nameKey: 'monsters.m_bat.name', emoji: '🦇',
         lv: 1, hp: 12, atk: 3, spd: 12, eva: 15, def: 0,
         growth: { hp: 0.1, atk: 0.1, eva: 0.5, def: 0 },
         parts: { head: true, body: true, legs: false },
@@ -33,7 +33,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_orc: {
-        id: 'm_orc', name: '오크', nameEn: 'Orc', emoji: '👹',
+        id: 'm_orc', name: '오크', nameKey: 'monsters.m_orc.name', emoji: '👹',
         lv: 1, hp: 28, atk: 6, spd: 3, eva: 0, def: 1,
         growth: { hp: 0.2, atk: 0.15, eva: 0, def: 0.5 },
         parts: { head: true, body: true, legs: true },
@@ -43,7 +43,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_ghost: {
-        id: 'm_ghost', name: '유령', nameEn: 'Ghost', emoji: '👻',
+        id: 'm_ghost', name: '유령', nameKey: 'monsters.m_ghost.name', emoji: '👻',
         lv: 1, hp: 20, atk: 5, spd: 8, eva: 20, def: 0,
         growth: { hp: 0.15, atk: 0.1, eva: 0.5, def: 0 },
         parts: { head: false, body: true, legs: false },
@@ -53,7 +53,7 @@ export const MONSTERS = {
         fear: true,
     },
     m_skeleton: {
-        id: 'm_skeleton', name: '해골', nameEn: 'Skeleton', emoji: '💀',
+        id: 'm_skeleton', name: '해골', nameKey: 'monsters.m_skeleton.name', emoji: '💀',
         lv: 1, hp: 25, atk: 6, spd: 6, eva: 5, def: 1,
         growth: { hp: 0.15, atk: 0.1, eva: 0.5, def: 0.2 },
         parts: { head: true, body: true, legs: true },
@@ -63,7 +63,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_warlock: {
-        id: 'm_warlock', name: '암흑사제', nameEn: 'Warlock', emoji: '🧛',
+        id: 'm_warlock', name: '암흑사제', nameKey: 'monsters.m_warlock.name', emoji: '🧛',
         lv: 1, hp: 22, atk: 7, spd: 7, eva: 10, def: 0,
         growth: { hp: 0.15, atk: 0.2, eva: 0.5, def: 0.2 },
         parts: { head: true, body: true, legs: true },
@@ -73,7 +73,7 @@ export const MONSTERS = {
         fear: true,
     },
     m_goblin_king: {
-        id: 'm_goblin_king', name: '킹 고블린', nameEn: 'Goblin King', emoji: '👑',
+        id: 'm_goblin_king', name: '킹 고블린', nameKey: 'monsters.m_goblin_king.name', emoji: '👑',
         lv: 1, hp: 45, atk: 8, spd: 6, eva: 10, def: 2,
         growth: { hp: 0.25, atk: 0.15, eva: 0.5, def: 0.5 },
         parts: { head: true, body: true, legs: true },
@@ -83,7 +83,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_slime: {
-        id: 'm_slime', name: '슬라임', nameEn: 'Slime', emoji: '🟢',
+        id: 'm_slime', name: '슬라임', nameKey: 'monsters.m_slime.name', emoji: '🟢',
         lv: 1, hp: 25, atk: 4, spd: 2, eva: 0, def: 0,
         growth: { hp: 0.2, atk: 0.1, eva: 0, def: 0 },
         parts: { head: false, body: true, legs: false },
@@ -93,7 +93,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_demon: {
-        id: 'm_demon', name: '악마', nameEn: 'Demon', emoji: '😈',
+        id: 'm_demon', name: '악마', nameKey: 'monsters.m_demon.name', emoji: '😈',
         lv: 1, hp: 40, atk: 10, spd: 9, eva: 10, def: 2,
         growth: { hp: 0.2, atk: 0.2, eva: 0.5, def: 0.5 },
         parts: { head: true, body: true, legs: true },
@@ -103,7 +103,7 @@ export const MONSTERS = {
         fear: true,
     },
     m_balrog: {
-        id: 'm_balrog', name: '발록', nameEn: 'Balrog', emoji: '🔥',
+        id: 'm_balrog', name: '발록', nameKey: 'monsters.m_balrog.name', emoji: '🔥',
         lv: 1, hp: 50, atk: 12, spd: 5, eva: 5, def: 3,
         growth: { hp: 0.3, atk: 0.2, eva: 0.5, def: 0.5 },
         parts: { head: true, body: true, legs: true },
@@ -113,7 +113,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_dark_knight: {
-        id: 'm_dark_knight', name: '암흑기사', nameEn: 'Dark Knight', emoji: '⚔️',
+        id: 'm_dark_knight', name: '암흑기사', nameKey: 'monsters.m_dark_knight.name', emoji: '⚔️',
         lv: 1, hp: 55, atk: 10, spd: 8, eva: 10, def: 4,
         growth: { hp: 0.25, atk: 0.15, eva: 0.5, def: 1 },
         parts: { head: true, body: true, legs: true },
@@ -123,7 +123,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_poison_slime: {
-        id: 'm_poison_slime', name: '독슬라임', nameEn: 'Poison Slime', emoji: '🟣',
+        id: 'm_poison_slime', name: '독슬라임', nameKey: 'monsters.m_poison_slime.name', emoji: '🟣',
         lv: 1, hp: 30, atk: 5, spd: 3, eva: 0, def: 0,
         growth: { hp: 0.2, atk: 0.15, eva: 0, def: 0 },
         parts: { head: false, body: true, legs: false },
@@ -133,7 +133,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_treant: {
-        id: 'm_treant', name: '트렌트', nameEn: 'Treant', emoji: '🌳',
+        id: 'm_treant', name: '트렌트', nameKey: 'monsters.m_treant.name', emoji: '🌳',
         lv: 1, hp: 40, atk: 8, spd: 1, eva: 0, def: 3,
         growth: { hp: 0.3, atk: 0.2, eva: 0, def: 0.5 },
         parts: { head: true, body: true, legs: true },
@@ -143,7 +143,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_giant_slime: {
-        id: 'm_giant_slime', name: '대형 슬라임', nameEn: 'Giant Slime', emoji: '🫧',
+        id: 'm_giant_slime', name: '대형 슬라임', nameKey: 'monsters.m_giant_slime.name', emoji: '🫧',
         lv: 1, hp: 50, atk: 10, spd: 2, eva: 0, def: 0,
         growth: { hp: 0.35, atk: 0.2, eva: 0, def: 0 },
         parts: { head: false, body: true, legs: false },
@@ -153,7 +153,7 @@ export const MONSTERS = {
         fear: false,
     },
     m_mimic: {
-        id: 'm_mimic', name: '미믹', nameEn: 'Mimic', emoji: '📦',
+        id: 'm_mimic', name: '미믹', nameKey: 'monsters.m_mimic.name', emoji: '📦',
         lv: 1, hp: 40, atk: 15, spd: 15, eva: 10, def: 0,
         growth: { hp: 0.2, atk: 0.2, eva: 1, def: 0 },
         parts: { head: false, body: true, legs: false },
@@ -186,6 +186,7 @@ export function getMonster(monsterId, waveLevel = 1) {
         atk: Math.round(base.atk * (1 + lvDiff * g.atk)),
         eva: Math.min(80, base.eva + lvDiff * g.eva),
         def: Math.round(base.def + lvDiff * g.def),
+        exp: Math.round((base.baseExp || (base.hp * 0.5 + base.atk * 1.5)) * (1 + lvDiff * 0.3)),
         currentLevel: waveLevel,
     };
 }

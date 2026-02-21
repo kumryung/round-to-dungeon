@@ -5,49 +5,80 @@ import {
   initDungeonState, getDungeonState, setLogCallback, setUpdateCallback,
   rollSpawnDice, getSpawnPlacements, commitSpawn,
   executeMovePhase, animateMovement,
-  handleTileInteraction, advanceWave, getSanityStatus,
+  handleTileInteraction, advanceWave, getSanityStatus, loadDungeonState, reduceSanity,
+  tickStatuses
 } from '../dungeonState.js';
 import { getMonster } from '../data/monsters.js';
-import { initCombat } from '../combatEngine.js';
+import { initCombat, loadCombatState } from '../combatEngine.js';
 import { showCombat } from '../combatOverlay.js';
 import { initInventory, getInventory, addItem, removeItem } from '../inventory.js';
 import { buildInlineInventoryHTML, refreshInlineInventory, showItemToast } from '../inventoryOverlay.js';
-import { rollChestLoot, rollEvent, rollMonsterLoot, ITEMS } from '../data/items.js';
+import { rollChestLoot, rollMonsterLoot, ITEMS } from '../data/items.js';
+import { rollEvent } from '../data/events.js';
+import { applyOutcome, showEventModal } from '../eventOverlay.js';
 import { openCraftingOverlay } from '../craftingOverlay.js';
-import { sendToMailbox } from '../gameState.js';
+import { sendToMailbox, getState, clearActiveDungeon, updateDungeonStatus } from '../gameState.js';
+import { t } from '../i18n.js';
 
 
 let boardRendered = false;
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function mount(container, params = {}) {
-  const { map, wanderer } = params;
+  let { map, wanderer, resume, prepInv, prepSafeBag } = params;
   boardRendered = false;
 
-  // Generate tiles
-  const sideLength = 5 + (map?.mapLv || 1);
-  const tiles = generateTiles(map);
+  let sideLength;
+  let tiles;
+  let ds;
 
-  // Init dungeon state
-  const ds = initDungeonState(tiles, map, wanderer);
+  if (resume && getState().activeDungeon) {
+    const saved = getState().activeDungeon;
+    map = saved.mapData;
+    wanderer = saved.wanderer;
+    sideLength = saved.sideLength;
+    tiles = saved.tiles;
+    ds = loadDungeonState(saved);
+
+    // Restore inventory from saved snapshot
+    if (saved.inventory) {
+      prepInv = saved.inventory.slots;
+      prepSafeBag = saved.inventory.safeBag;
+    }
+  } else {
+    sideLength = map.tiles / 4;
+    tiles = generateTiles(map);
+    ds = initDungeonState(tiles, map, wanderer);
+    // Mark global wanderer as exploring
+    const globalW = getState().recruitedWanderers.find(rw => rw.id === wanderer.id);
+    if (globalW) {
+      globalW.status = 'exploring';
+    }
+  }
 
   container.innerHTML = `
   <div class="dungeon-scene">
       <!-- Top bar -->
       <div class="dungeon-topbar">
-        <button class="btn-return" id="btnReturn">← 마을로 귀환</button>
         <div class="dungeon-topbar-info">
-          <span class="topbar-map">${map?.icon || '🗺️'} ${map?.name || '던전'}</span>
+          <span class="topbar-map">${map?.icon || '🗺️'} ${map?.nameKey ? t(map.nameKey) : (map?.name || t('dungeon_ui.dungeon', '던전'))}</span>
           <span class="topbar-sep">|</span>
-          <span class="topbar-wave" id="topWave">Wave ${ds.wave}</span>
+          <span class="topbar-wave" id="topWave">${t('dungeon_ui.wave')} ${ds.wave}</span>
           <span class="topbar-sep">|</span>
-          <span class="topbar-turn" id="topTurn">Turn ${ds.turn}</span>
+          <span class="topbar-turn" id="topTurn">${t('dungeon_ui.turn')} ${ds.turn}</span>
         </div>
-        <div class="topbar-actions">
-          <button class="btn-craft" id="btnCraft">⚒️ 제작</button>
+        <div class="topbar-actions" style="display:flex; align-items:center; gap: 10px;">
+          <div class="currency-item diamond" title="${t('ui.town.tooltip_diamond', '다이아몬드')}">
+            <span class="currency-icon">💎</span>
+            <span class="currency-value">${getState().diamonds.toLocaleString()}</span>
+          </div>
+          <div class="currency-item gold" title="${t('ui.town.tooltip_gold', '골드')}">
+            <span class="currency-icon">💰</span>
+            <span class="currency-value">${getState().gold.toLocaleString()}</span>
+          </div>
           <div class="topbar-wanderer">
             <span>${wanderer?.portrait || ''}</span>
-            <span>${wanderer?.name || ''}</span>
+            <span>${wanderer?.nameKey ? t(wanderer.nameKey) : (wanderer?.name || '')}</span>
           </div>
         </div>
       </div>
@@ -57,8 +88,8 @@ export function mount(container, params = {}) {
         <!-- Left: Player Info Panel -->
         <aside class="dungeon-left">
           <div class="panel hud-panel" id="hudPanel">
-            <h3>👤 플레이어</h3>
-            ${wanderer ? renderHUD(ds) : '<p>정보 없음</p>'}
+            <h3>${t('dungeon_ui.player_info')}</h3>
+            ${wanderer ? renderHUD(ds) : `<p>${t('dungeon_ui.no_info')}</p>`}
           </div>
         </aside>
 
@@ -70,11 +101,11 @@ export function mount(container, params = {}) {
         <!-- Right: Log & Action -->
         <aside class="dungeon-right">
           <div class="panel log-panel">
-            <h3>📜 로그</h3>
+            <h3>${t('dungeon_ui.log')}</h3>
             <div class="log-content" id="logContent"></div>
           </div>
           <div class="panel action-panel" id="actionPanel">
-            <h3>🎯 액션</h3>
+            <h3>${t('dungeon_ui.action')}</h3>
             <div id="actionContent"></div>
           </div>
         </aside>
@@ -103,17 +134,17 @@ export function mount(container, params = {}) {
   });
 
   // Initialize inventory
-  initInventory(wanderer);
+  const inv = initInventory(wanderer, prepInv, prepSafeBag);
 
-  // Return button
-  document.getElementById('btnReturn').addEventListener('click', () => {
-    changeScene('town');
-  });
+  if (resume && getState().activeDungeon?.inventory?.equipped) {
+    // Restore equipped weapon if resuming
+    inv.equipped = getState().activeDungeon.inventory.equipped;
+  } else if (!resume && wanderer.equipments?.weapon && wanderer.equipments.weapon.id !== 'w_fist') {
+    // Load town equipment into dungeon run
+    inv.equipped = { ...wanderer.equipments.weapon };
+  }
 
-  // Crafting button
-  document.getElementById('btnCraft').addEventListener('click', () => {
-    openCraftingOverlay();
-  });
+  // Initial inventory render
 
   // Render the board
   const boardContainer = document.getElementById('boardContainer');
@@ -125,9 +156,20 @@ export function mount(container, params = {}) {
 
   // Need a tiny delay for DOM to settle before positioning
   requestAnimationFrame(() => {
-    movePlayerToken(0, sideLength, false);
-    addLog(`${wanderer?.name || '방랑자'} 이(가) ${map?.name || '던전'}에 입장했습니다.`);
-    addLog(`Wave ${ds.wave} 시작!`);
+    movePlayerToken(ds.playerPosition, sideLength, false);
+    movePlayerToken(ds.playerPosition, sideLength, false);
+
+    // Resolve localized names
+    const wName = wanderer?.nameKey ? t(wanderer.nameKey) : (wanderer?.name || t('dungeon_ui.wanderer', '방랑자'));
+    const mName = map?.nameKey ? t(map.nameKey) : (map?.name || t('dungeon_ui.dungeon', '던전'));
+
+    // Only log entering messages if this is a fresh run (not resuming)
+    if (!resume) {
+      addLog(t('logs.enter_dungeon', { name: wName, map: mName }));
+      addLog(t('logs.wave_start', { wave: ds.wave }));
+    } else {
+      addLog(t('logs.resume_explore', { name: wName }, `[System] ${wName} 방랑자의 탐험을 이어서 진행합니다.`));
+    }
 
     // Initial inventory render
     refreshInlineInventory();
@@ -135,19 +177,41 @@ export function mount(container, params = {}) {
     // Expose refreshHUD globally for inventory popup cross-module use
     window.__refreshHUD = () => refreshHUD(getDungeonState());
 
-    // Start spawn phase with Wave Title
+    // Start spawn phase with Wave Title or resume combat
     (async () => {
-      await showWaveTitle(ds.wave);
-      startSpawnPhase();
-      // Bind Level Up button if present
-      const btnStats = container.querySelector('#btnOpenStats');
-      if (btnStats) {
-        btnStats.addEventListener('click', () => {
-          openLevelUpOverlay(() => {
-            // Callback on close: refresh HUD
-            renderHUD(container, getDungeonState());
-          });
+      if (resume && ds.currentHp <= 0) {
+        // Player died and refreshed before leaving
+        addLog(t('logs.death'));
+        showGameOver();
+      } else if (resume && ds.combat) {
+        // Resume combat session
+        loadCombatState(ds.combat);
+        const mainMonster = ds.combat.monsters[0];
+        showCombat(mainMonster, createCombatCallbacks(mainMonster), true);
+      } else if (resume && ds.activeEvent) {
+        // Resume active event modal
+        addLog(`[System] 진행 중이던 이벤트를 복원합니다.`);
+        showEventModal(ds.activeEvent, addLog, refreshHUD, refreshInlineInventory, ({ died, forceEncounter }) => {
+          ds.activeEvent = null; // Clear event after choice
+          updateDungeonStatus(ds);
+          updateSanityVFX(ds);
+          if (died) { addLog(t('logs.trap_death')); showGameOver(); return; }
+          if (forceEncounter) addLog('⚔️ 적이 나타났다!');
+          showMoveUI();
         });
+      } else {
+        await showWaveTitle(ds.wave);
+        startSpawnPhase();
+        // Bind Level Up button if present
+        const btnStats = container.querySelector('#btnOpenStats');
+        if (btnStats) {
+          btnStats.addEventListener('click', () => {
+            openLevelUpOverlay(() => {
+              // Callback on close: refresh HUD
+              renderHUD(container, getDungeonState());
+            });
+          });
+        }
       }
     })();
   });
@@ -159,7 +223,7 @@ export function unmount() {
 
 // ─── Game Flow ───
 
-const SPAWN_LABELS = { monster: '💀 몬스터', chest: '📦 보물상자', event: '❓ 이벤트' };
+const SPAWN_LABELS = { monster: 'dungeon_ui.monster', chest: 'dungeon_ui.treasure', event: 'dungeon_ui.event' };
 
 /**
  * Auto-run spawn phase with sequential animation.
@@ -172,16 +236,16 @@ async function startSpawnPhase() {
 
   // Step 1: Roll dice
   const rolls = rollSpawnDice();
-  addLog(`🎲 스폰 주사위  — 몬스터: ${rolls.monsterRoll} | 보물: ${rolls.treasureRoll} | 이벤트: ${rolls.eventRoll}`);
+  addLog(t('logs.spawn_dice', { monster: rolls.monsterRoll, treasure: rolls.treasureRoll, event: rolls.eventRoll }));
 
   // Show dice results in action panel
   actionEl.innerHTML = `
   <div class="spawn-result fade-in">
-      <p class="action-label">🎲 스폰 단계</p>
+      <p class="action-label">${t('dungeon_ui.spawn_phase')}</p>
       <div class="dice-results">
-        <div class="dice-item dice-roll-anim" style="animation-delay:0s"><span class="dice-icon">💀</span><span class="dice-val">${rolls.monsterRoll}</span><span class="dice-label">몬스터</span></div>
-        <div class="dice-item dice-roll-anim" style="animation-delay:0.15s"><span class="dice-icon">📦</span><span class="dice-val">${rolls.treasureRoll}</span><span class="dice-label">보물</span></div>
-        <div class="dice-item dice-roll-anim" style="animation-delay:0.3s"><span class="dice-icon">❓</span><span class="dice-val">${rolls.eventRoll}</span><span class="dice-label">이벤트</span></div>
+        <div class="dice-item dice-roll-anim" style="animation-delay:0s"><span class="dice-icon">💀</span><span class="dice-val">${rolls.monsterRoll}</span><span class="dice-label">${t('dungeon_ui.monster')}</span></div>
+        <div class="dice-item dice-roll-anim" style="animation-delay:0.15s"><span class="dice-icon">📦</span><span class="dice-val">${rolls.treasureRoll}</span><span class="dice-label">${t('dungeon_ui.treasure')}</span></div>
+        <div class="dice-item dice-roll-anim" style="animation-delay:0.3s"><span class="dice-icon">❓</span><span class="dice-val">${rolls.eventRoll}</span><span class="dice-label">${t('dungeon_ui.event')}</span></div>
       </div>
       <div class="spawn-progress" id="spawnProgress"></div>
   </div>
@@ -209,16 +273,18 @@ async function startSpawnPhase() {
     }
 
     // Log & progress
-    addLog(`  ↳ ${SPAWN_LABELS[p.type]} → 타일 ${p.tileIndex}`);
+    const typeLabel = t(SPAWN_LABELS[p.type]);
+    const typeEmoji = p.type === 'monster' ? '💀' : p.type === 'chest' ? '📦' : '❓';
+    addLog(t('logs.spawn_at_tile', { type: `${typeEmoji} ${typeLabel}`, tile: p.tileIndex }));
     if (progressEl) {
-      progressEl.textContent = `배치 중... (${i + 1}/${placements.length})`;
+      progressEl.textContent = `${t('dungeon_ui.placing')} (${i + 1}/${placements.length})`;
     }
 
     await delay(350);
   }
 
   if (progressEl) {
-    progressEl.textContent = `✅ ${placements.length}개 오브젝트 배치 완료`;
+    progressEl.textContent = `✅ ${placements.length} ${t('dungeon_ui.placement_complete')}`;
   }
 
   // Step 4: Transition to move phase
@@ -233,7 +299,7 @@ function showMoveUI() {
 
   actionEl.innerHTML = `
   <div class="move-phase fade-in">
-    <button class="btn-action btn-roll-move" id="btnRollMove">🎲 ROLL MOVE</button>
+    <button class="btn-action btn-roll-move" id="btnRollMove">${t('dungeon_ui.roll_move')}</button>
   </div>
   `;
 
@@ -260,14 +326,25 @@ async function handleRollMove() {
   // Animate movement along path
   await animateMovement(result.path, ds.sideLength);
 
+  // Tick status effects (burn, poison, bleed, etc.)
+  tickStatuses();
+  refreshTopbar(ds);
+  refreshHUD(ds);
+  if (ds.currentHp <= 0) { addLog('☠️ 상태이상으로 사망했습니다.'); showGameOver(); return; }
+
   // Handle tile interaction
   const interaction = handleTileInteraction();
 
   // Handle wave advancement if at start
   if (result.finalPosition === 0 && ds.turn > 0) {
-    addLog(`🏠 시작점에 도착!`);
+    addLog(t('logs.arrived_start'));
 
-    addLog(`🏠 시작점에 도착! 다음 웨이브로 자동 진행합니다.`);
+    addLog(t('logs.auto_advance'));
+
+    if (ds.wave >= ds.mapData.maxWave) {
+      showDungeonClear();
+      return;
+    }
 
     // Auto-advance wave
     advanceWave();
@@ -288,85 +365,33 @@ async function handleRollMove() {
     const monsterInstance = getMonster(monsterId, monsterLevel);
 
     if (!monsterInstance) {
-      addLog(`⚠️ 알 수 없는 몬스터: ${monsterId}`);
+      addLog(t('logs.unknown_monster', { id: monsterId }));
       showMoveUI();
       return;
     }
 
     // Fear monsters: sanity -5
     if (monsterInstance.fear) {
-      ds.sanity = Math.max(0, ds.sanity - 5);
-      addLog(`😱 공포! 정신력 -5(${monsterInstance.name})`);
+      const drop = reduceSanity(5);
+      const mName = monsterInstance.nameKey ? t(monsterInstance.nameKey) : monsterInstance.name;
+      addLog(t('logs.fear_effect', { name: mName }) + ` (-${drop})`);
       refreshHUD(ds);
     }
 
+    const mName = monsterInstance.nameKey ? t(monsterInstance.nameKey) : monsterInstance.name;
     const actionEl = document.getElementById('actionContent');
     if (actionEl) {
       actionEl.innerHTML = `
   <div class="encounter fade-in">
-          <p class="action-label">${monsterInstance.emoji} 전투 중!</p>
-          <p class="action-desc">${monsterInstance.name} Lv.${monsterLevel}</p>
+          <p class="action-label">${t('logs.combat_start', { emoji: monsterInstance.emoji })}</p>
+          <p class="action-desc">${t('logs.combat_desc', { name: mName, level: monsterLevel })}</p>
   </div>
   `;
     }
 
     // Init & show combat
     initCombat(ds.wanderer, monsterInstance);
-    await showCombat(monsterInstance, {
-      onVictory: () => {
-        // Clear monster from tile
-        const tile = ds.tiles[ds.playerPosition];
-        tile.object = null;
-        tile.objectData = null;
-        setTileObject(tile.index, null);
-        addLog(`🏆 ${monsterInstance.name} 처치!`);
-        refreshHUD(getDungeonState());
-        // Drop loot
-        const loot = rollMonsterLoot(monsterInstance);
-        if (loot) {
-          const added = addItem(loot);
-          if (added) {
-            // Delay log slightly
-            setTimeout(() => {
-              const logEl = document.getElementById('logContent');
-              if (logEl) {
-                const entry = document.createElement('p');
-                entry.className = 'log-entry log-new';
-                entry.textContent = `> 💎 획득: ${loot.emoji} ${loot.name}`;
-                logEl.appendChild(entry);
-                logEl.scrollTop = logEl.scrollHeight;
-              }
-            }, 150);
-            showItemToast(loot);
-          } else {
-            addLog(`💎 가방이 가득 찼습니다.`);
-          }
-        }
-
-        refreshHUD(getDungeonState());
-        refreshInlineInventory();
-        showMoveUI();
-      },
-      onDefeat: () => {
-        addLog(`💀 사망...`);
-        // Recover safe bag items
-        const inv = getInventory();
-        if (inv && inv.safeBag) {
-          const recoveredItems = inv.safeBag.filter(i => i !== null);
-          if (recoveredItems.length > 0) {
-            sendToMailbox(recoveredItems, `${ds.wanderer?.name}의 유품 (안전가방)`);
-            addLog(`✉️ 안전가방의 아이템이 우편함으로 발송되었습니다.`);
-          }
-        }
-        showGameOver();
-      },
-      onFlee: () => {
-        addLog(`🏃 ${monsterInstance.name}에게서 도망쳤다!`);
-        refreshHUD(getDungeonState());
-        refreshInlineInventory();
-        showMoveUI();
-      },
-    });
+    await showCombat(monsterInstance, createCombatCallbacks(monsterInstance));
     return;
   }
 
@@ -375,10 +400,10 @@ async function handleRollMove() {
     const loot = rollChestLoot();
     const added = addItem(loot);
     if (added) {
-      addLog(`📦 보물상자: ${loot.emoji} ${loot.name} 획득!`);
+      addLog(t('logs.chest_gain', { emoji: loot.emoji, name: loot.nameKey ? t(loot.nameKey) : loot.name }));
       showItemToast(loot);
     } else {
-      addLog(`📦 보물상자: 인벤토리가 가득 찼습니다!`);
+      addLog(t('logs.chest_full'));
     }
     refreshHUD(ds);
     refreshInlineInventory();
@@ -387,44 +412,47 @@ async function handleRollMove() {
     return;
   }
 
-  // Event tile: roll random event
+  // Event tile: roll random event (new system)
   if (interaction.type === 'event') {
-    const evt = rollEvent(ds.mapData?.eventPool);
-    addLog(`${evt.emoji} ${evt.name}: ${evt.desc}`);
+    const evt = rollEvent(ds.mapData);
+    addLog(`${evt.emoji || '❓'} ${t(evt.nameKey || '', evt.name || '이벤트')} - ${t(evt.descKey || '', evt.desc || '')}`);
 
-    if (evt.effect === 'heal') {
-      ds.currentHp = Math.min(ds.maxHp, ds.currentHp + evt.value);
-    } else if (evt.effect === 'sanity_restore') {
-      ds.sanity = Math.min(ds.maxSanity, ds.sanity + evt.value);
-    } else if (evt.effect === 'trap') {
-      ds.currentHp = Math.max(0, ds.currentHp - evt.hpDmg);
-      ds.sanity = Math.max(0, ds.sanity - evt.sanityDmg);
-    } else if (evt.effect === 'sanity_drain') {
-      ds.sanity = Math.max(0, ds.sanity - evt.value);
-    } else if (evt.effect === 'random_item') {
-      const loot = rollChestLoot();
-      const added = addItem(loot);
-      if (added) {
-        addLog(`  ↳ ${loot.emoji} ${loot.name} 획득!`);
-        showItemToast(loot);
-      }
-    } else if (evt.effect === 'rest') {
-      ds.currentHp = Math.min(ds.maxHp, ds.currentHp + evt.hpVal);
-      ds.sanity = Math.min(ds.maxSanity, ds.sanity + evt.sanityVal);
+    if (evt.type === 'immediate') {
+      // Roll a single outcome and apply immediately
+      const outcomes = evt.outcomes || [];
+      const total = outcomes.reduce((a, o) => a + o.weight, 0);
+      let r = Math.random() * total;
+      let picked = outcomes[outcomes.length - 1];
+      for (const o of outcomes) { r -= o.weight; if (r <= 0) { picked = o; break; } }
+      const died = applyOutcome(picked, addLog, refreshHUD, refreshInlineInventory);
+      updateSanityVFX(ds);
+
+      // Save state immediately after applying outcome
+      updateDungeonStatus(ds);
+
+      if (died) { addLog(t('logs.trap_death')); showGameOver(); return; }
+      await delay(800);
+      showMoveUI();
+    } else {
+      // Interactive: show modal, wait for choice
+      ds.activeEvent = evt;
+      updateDungeonStatus(ds); // save state with pending event
+
+      showEventModal(evt, addLog, refreshHUD, refreshInlineInventory, ({ died, forceEncounter }) => {
+        ds.activeEvent = null; // Clear event after choice
+        updateSanityVFX(ds);
+
+        // Save state immediately after choice
+        updateDungeonStatus(ds);
+
+        if (died) { addLog(t('logs.trap_death')); showGameOver(); return; }
+        if (forceEncounter) {
+          // Roll a random encounter next
+          addLog('⚔️ 적이 나타났다!');
+        }
+        showMoveUI();
+      });
     }
-
-    refreshHUD(ds);
-    refreshInlineInventory();
-    updateSanityVFX(ds);
-
-    if (ds.currentHp <= 0) {
-      addLog(`💀 함정으로 사망...`);
-      showGameOver();
-      return;
-    }
-
-    await delay(800);
-    showMoveUI();
     return;
   }
 
@@ -432,17 +460,194 @@ async function handleRollMove() {
   showMoveUI();
 }
 
+function createCombatCallbacks(monsterInstance) {
+  const ds = getDungeonState();
+  return {
+    onVictory: (allMonsters) => {
+      // Clear monster from tile
+      const tile = ds.tiles[ds.playerPosition];
+      tile.object = null;
+      tile.objectData = null;
+      setTileObject(tile.index, null);
+
+      // Only count non-summon monsters for EXP and loot
+      const naturalMonsters = allMonsters ? allMonsters.filter(m => !m.isSummon) : [monsterInstance];
+
+      // Grant EXP (sum all natural monster EXP)
+      const expGained = naturalMonsters.reduce((sum, m) => sum + (m.exp || 10), 0);
+      const mName = monsterInstance.nameKey ? t(monsterInstance.nameKey) : monsterInstance.name;
+
+      import('../gameState.js').then(module => {
+        module.addExpToWanderer(ds.wanderer.id, expGained);
+
+        // Sync HUD exp for visual only
+        const globalWanderer = module.getState().recruitedWanderers.find(w => w.id === ds.wanderer.id);
+        if (globalWanderer) {
+          ds.exp = globalWanderer.exp;
+          ds.expToNext = globalWanderer.level * 100;
+          ds.wanderer.level = globalWanderer.level;
+        }
+        refreshHUD(getDungeonState());
+      });
+
+      addLog(t('logs.victory', { name: mName }) + ` (+${expGained} EXP)`);
+
+      // Drop loot for each natural monster
+      naturalMonsters.forEach(m => {
+        const loot = rollMonsterLoot(m);
+        if (loot) {
+          const added = addItem(loot);
+          if (added) {
+            setTimeout(() => {
+              const logEl = document.getElementById('logContent');
+              if (logEl) {
+                const entry = document.createElement('p');
+                entry.className = 'log-entry log-new';
+                entry.textContent = `> ${t('logs.loot_gain', { emoji: loot.emoji, name: loot.name })}`;
+                logEl.appendChild(entry);
+                logEl.scrollTop = logEl.scrollHeight;
+              }
+            }, 150);
+            showItemToast(loot);
+          } else {
+            addLog(t('logs.inventory_full'));
+          }
+        }
+      });
+
+      refreshHUD(getDungeonState());
+      refreshInlineInventory();
+      showMoveUI();
+    },
+    onDefeat: () => {
+      addLog(t('logs.death'));
+      // Recover safe bag items
+      const inv = getInventory();
+      if (inv && inv.safeBag) {
+        const recoveredItems = inv.safeBag.filter(i => i !== null);
+        if (recoveredItems.length > 0) {
+          sendToMailbox(recoveredItems, t('ui.mailbox.dead_safebag', { name: ds.wanderer?.nameKey ? t(ds.wanderer.nameKey) : ds.wanderer?.name }));
+          addLog(t('logs.safe_bag_recovery'));
+        }
+      }
+      showGameOver();
+    },
+    onFlee: () => {
+      const mName = monsterInstance.nameKey ? t(monsterInstance.nameKey) : monsterInstance.name;
+      addLog(t('logs.flee', { name: mName }));
+      refreshHUD(getDungeonState());
+      refreshInlineInventory();
+      showMoveUI();
+    },
+  };
+}
+
+function showDungeonClear() {
+  const actionEl = document.getElementById('actionContent');
+  if (actionEl) {
+    actionEl.innerHTML = '';
+
+    const container = document.createElement('div');
+    container.className = 'game-over fade-in';
+    container.style.background = 'linear-gradient(180deg, rgba(40,30,15,0.9), rgba(20,15,5,0.9))';
+    container.style.borderColor = 'var(--gold)';
+
+    // Victory Label
+    const p1 = document.createElement('p');
+    p1.className = 'action-label';
+    p1.style.color = 'var(--gold)';
+    p1.textContent = t('ui.dungeon.status_cleared', 'Dungeon Cleared');
+    container.appendChild(p1);
+
+    // Description
+    const p2 = document.createElement('p');
+    p2.className = 'action-desc';
+    p2.textContent = t('dungeon_ui.dungeon_cleared_desc', '무사히 탐험을 마치고 마을로 귀환합니다.');
+    container.appendChild(p2);
+
+    // Return Button
+    const btn = document.createElement('button');
+    btn.className = 'btn-action btn-return-town';
+    btn.style.background = 'linear-gradient(180deg, #3a2810, #1a1005)';
+    btn.style.borderColor = 'var(--gold)';
+    btn.style.color = 'var(--gold)';
+    btn.textContent = t('common.confirm', '확인');
+    container.appendChild(btn);
+
+    actionEl.appendChild(container);
+
+    btn.addEventListener('click', () => {
+      const gs = getState();
+      const ds = getDungeonState();
+      const w = ds.wanderer;
+
+      if (w) {
+        // Sync stats back to global wanderer
+        const globalW = gs.recruitedWanderers.find(rw => rw.id === w.id);
+        if (globalW) {
+          globalW.curHp = ds.currentHp;
+          globalW.curSanity = ds.sanity;
+        }
+
+        // Merge Inventory & Safe Bag into storage
+        const allLoot = [
+          ...(ds.inventory?.items || []),
+          ...(ds.inventory?.safeBag || [])
+        ].filter(item => item !== null);
+        gs.storage.push(...allLoot);
+      }
+
+      updateDungeonStatus(ds.mapData.id, 'cleared');
+      clearActiveDungeon();
+      changeScene('town');
+    });
+  }
+}
+
 function showGameOver() {
   const actionEl = document.getElementById('actionContent');
   if (actionEl) {
-    actionEl.innerHTML = `
-  <div class="game-over fade-in">
-        <p class="action-label">💀 Game Over</p>
-        <p class="action-desc">방랑자가 쓰러졌습니다...</p>
-        <button class="btn-action btn-return-town" id="btnGameOverReturn">마을로 돌아가기</button>
-  </div>
-  `;
-    document.getElementById('btnGameOverReturn').addEventListener('click', () => {
+    actionEl.innerHTML = '';
+
+    const container = document.createElement('div');
+    container.className = 'game-over fade-in';
+
+    // Game Over Label
+    const p1 = document.createElement('p');
+    p1.className = 'action-label';
+    p1.textContent = t('dungeon_ui.game_over');
+    container.appendChild(p1);
+
+    // Description
+    const p2 = document.createElement('p');
+    p2.className = 'action-desc';
+    p2.textContent = t('dungeon_ui.wanderer_fallen');
+    container.appendChild(p2);
+
+    // Return Button
+    const btn = document.createElement('button');
+    btn.className = 'btn-action btn-return-town';
+    btn.id = 'btnGameOverReturn';
+    btn.textContent = t('dungeon_ui.return_to_town');
+    container.appendChild(btn);
+
+    actionEl.appendChild(container);
+
+    btn.addEventListener('click', () => {
+      const gs = getState();
+      const ds = getDungeonState();
+      const w = ds.wanderer; // Current wanderer in dungeon
+      if (w) {
+        const globalW = gs.recruitedWanderers.find(rw => rw.id === w.id);
+        if (globalW) globalW.status = 'dead';
+        // send Safe Bag to mailbox
+        const safeItems = (ds.inventory?.safeBag || []).filter(item => item !== null);
+        if (safeItems.length > 0) {
+          sendToMailbox(safeItems, t('ui.mailbox.dead_safebag', { name: w.nameKey ? t(w.nameKey) : w.name }), 7);
+        }
+      }
+      updateDungeonStatus(ds.mapData.id, 'failed');
+      clearActiveDungeon();
       changeScene('town');
     });
   }
@@ -473,7 +678,10 @@ function showDicePopup(value) {
 function refreshTopbar(ds) {
   const waveEl = document.getElementById('topWave');
   const turnEl = document.getElementById('topTurn');
-  if (waveEl) waveEl.textContent = `Wave ${ds.wave}`;
+  if (waveEl) {
+    const isFinal = ds.mapData && ds.mapData.maxWave && ds.wave >= ds.mapData.maxWave;
+    waveEl.textContent = isFinal ? t('ui.dungeon.final_wave', 'Final Wave') : `${t('dungeon_ui.wave', 'Wave')} ${ds.wave}`;
+  }
   if (turnEl) turnEl.textContent = `Turn ${ds.turn}`;
 }
 
@@ -481,9 +689,13 @@ async function showWaveTitle(wave) {
   const container = document.querySelector('.dungeon-scene');
   if (!container) return;
 
+  const ds = getDungeonState();
+  const isFinal = ds.mapData && ds.mapData.maxWave && wave >= ds.mapData.maxWave;
+  const titleText = isFinal ? t('ui.dungeon.final_wave', 'Final Wave') : t('dungeon_ui.wave_title', { wave });
+
   const overlay = document.createElement('div');
   overlay.className = 'wave-title-overlay';
-  overlay.innerHTML = `<div class="wave-title-text">WAVE ${wave}</div>`;
+  overlay.innerHTML = `<div class="wave-title-text">${titleText}</div>`;
   container.appendChild(overlay);
 
   // Wait for animation (Reduced to ~1.3s total)
@@ -494,12 +706,13 @@ async function showWaveTitle(wave) {
 function refreshHUD(ds) {
   const hudEl = document.getElementById('hudPanel');
   if (!hudEl) return;
-  hudEl.innerHTML = `<h3>👤 플레이어</h3>` + renderHUD(ds);
+  hudEl.innerHTML = `<h3>${t('dungeon_ui.player_info')}</h3>` + renderHUD(ds);
 }
 
 function renderHUD(ds) {
   const w = ds.wanderer;
-  if (!w) return '<p>정보 없음</p>';
+  if (!w) return `<p>${t('dungeon_ui.no_info')}</p>`;
+
 
   const hpPercent = Math.round((ds.currentHp / ds.maxHp) * 100);
   const sanityPercent = Math.round((ds.sanity / ds.maxSanity) * 100);
@@ -507,44 +720,53 @@ function renderHUD(ds) {
 
   return `
   <div class="hud-portrait">${w.portrait}</div>
-    <div class="hud-name">${w.name}</div>
-    <div class="hud-class">${w.classIcon} ${w.className}</div>
+    <div class="hud-name">${w.nameKey ? t(w.nameKey) : w.name}</div>
+    <div class="hud-class">${w.classIcon} ${w.classKey ? t(w.classKey) : w.className}</div>
 
     <div class="hud-bar-group">
-      <label class="hud-bar-label">❤️ HP</label>
+      <label class="hud-bar-label">${t('dungeon_ui.hp')}</label>
       <div class="hud-bar hp-bar"><div class="hud-bar-fill" style="width:${hpPercent}%"></div><span class="hud-bar-text">${ds.currentHp}/${ds.maxHp}</span></div>
     </div>
     <div class="hud-bar-group">
-      <label class="hud-bar-label">🔮 Sanity</label>
-      <div class="hud-bar sanity-bar ${sanityState.class}"><div class="hud-bar-fill" style="width:${sanityPercent}%"></div><span class="hud-bar-text">${ds.sanity}/${ds.maxSanity} (${sanityState.label})</span></div>
+      <label class="hud-bar-label">${t('dungeon_ui.sanity')}</label>
+      <div class="hud-bar sanity-bar ${sanityState.class}"><div class="hud-bar-fill" style="width:${sanityPercent}%"></div><span class="hud-bar-text">${ds.sanity}/${ds.maxSanity} (${t(sanityState.labelKey)})</span></div>
     </div>
     <div class="hud-bar-group">
-      <label class="hud-bar-label">✨ EXP</label>
+    <div class="hud-bar-group">
+      <label class="hud-bar-label">${t('dungeon_ui.exp')}</label>
       <div class="hud-bar exp-bar"><div class="hud-bar-fill" style="width:${(ds.exp / ds.expToNext) * 100}%"></div><span class="hud-bar-text">${ds.exp}/${ds.expToNext}</span></div>
     </div>
 
     ${ds.statusEffects && ds.statusEffects.length > 0 ? `
     <div class="hud-status-effects">
-      ${ds.statusEffects.map(e => `<span class="status-badge status-${e.type}" title="${e.label || e.type} (${e.duration}턴)">${e.icon || '⚠️'} ${e.duration}</span>`).join('')}
+      ${ds.statusEffects.map(e => {
+    const durText = e.duration === Infinity ? '∞' : `${e.duration}`;
+    const label = e.labelKey ? t(e.labelKey, e.id) : (e.label || e.id);
+    return `<span class="status-badge status-${e.id}" title="${label} (${durText}턴)">${e.icon || '⚠️'} ${durText}</span>`;
+  }).join('')}
     </div>` : ''
     }
     <div class="hud-info-row">
       <span class="hud-info-item">📍 Tile ${ds.playerPosition}</span>
-      <span class="hud-info-item">🌊 Wave ${ds.wave}</span>
-      <span class="hud-info-item">🆙 Lv.${ds.level} ${ds.freeStatPoints > 0 ? `<button id="btnOpenStats" class="btn-levelup-trigger pulse">스탯배분</button>` : ''}</span>
+      <span class="hud-info-item">${(ds.mapData && ds.mapData.maxWave && ds.wave >= ds.mapData.maxWave) ? t('ui.dungeon.final_wave', 'Final Wave') : `${t('dungeon_ui.wave', 'Wave')} ${ds.wave}`}</span>
+      <span class="hud-info-item">🆙 Lv.${ds.level} ${ds.freeStatPoints > 0 ? `<button id="btnOpenStats" class="btn-levelup-trigger pulse">${t('dungeon_ui.stats_dist')}</button>` : ''}</span>
     </div>
 
     <div class="hud-stats">
-      <div class="hud-stat"><span class="hud-stat-key">VIT</span><span class="hud-stat-val">${w.vit}</span></div>
-      <div class="hud-stat"><span class="hud-stat-key">STR</span><span class="hud-stat-val">${w.str}</span></div>
-      <div class="hud-stat"><span class="hud-stat-key">AGI</span><span class="hud-stat-val">${w.agi}</span></div>
-      <div class="hud-stat"><span class="hud-stat-key">SPD</span><span class="hud-stat-val">${w.spd}</span></div>
-      <div class="hud-stat"><span class="hud-stat-key">DEX</span><span class="hud-stat-val">${w.dex}</span></div>
-      <div class="hud-stat"><span class="hud-stat-key">LUK</span><span class="hud-stat-val">${w.luk}</span></div>
+      <div class="hud-stat"><span class="hud-stat-key">${t('dungeon_ui.vit')}</span><span class="hud-stat-val">${w.vit}</span></div>
+      <div class="hud-stat"><span class="hud-stat-key">${t('dungeon_ui.str')}</span><span class="hud-stat-val">${w.str}</span></div>
+      <div class="hud-stat"><span class="hud-stat-key">${t('dungeon_ui.agi')}</span><span class="hud-stat-val">${w.agi}</span></div>
+      <div class="hud-stat"><span class="hud-stat-key">${t('dungeon_ui.spd')}</span><span class="hud-stat-val">${w.spd}</span></div>
+      <div class="hud-stat"><span class="hud-stat-key">${t('dungeon_ui.dex')}</span><span class="hud-stat-val">${w.dex}</span></div>
+      <div class="hud-stat"><span class="hud-stat-key">${t('dungeon_ui.luk')}</span><span class="hud-stat-val">${w.luk}</span></div>
     </div>
 
     <div class="hud-traits">
-      ${w.traits.map((t) => `<span class="trait-badge ${t.type}" title="${t.desc}">${t.icon || ''} ${t.name}</span>`).join('')}
+      ${w.traits.map((trait) => {
+      const nameKey = trait.nameKey || `traits.${trait.type}.${trait.id}.name`;
+      const descKey = trait.descKey || `traits.${trait.type}.${trait.id}.desc`;
+      return `<span class="trait-badge ${trait.type}" title="${t(descKey)}">${trait.icon || ''} ${t(nameKey)}</span>`;
+    }).join('')}
     </div>
 `;
 }

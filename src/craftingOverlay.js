@@ -6,8 +6,14 @@ import { WEAPONS, getWeapon, gradeColor } from './data/weapons.js';
 import { ITEMS } from './data/items.js';
 import { getInventory, hasMaterials, consumeMaterials, addItem, countItem } from './inventory.js';
 import { refreshInlineInventory, showItemToast } from './inventoryOverlay.js';
+import { t } from './i18n.js';
 
 let overlayEl = null;
+
+function getLocalGrade(g) {
+    const map = { '일반': 'common', '영웅': 'epic', '전설': 'legendary' };
+    return map[g] ? t(`grades.${map[g]}`) : g;
+}
 
 /**
  * Open the crafting panel overlay.
@@ -48,7 +54,7 @@ function buildCraftingHTML() {
 
         return `
             <div class="craft-grade-section">
-                <h3 class="craft-grade-title" style="color:${gradeColor(grade)}">${grade}</h3>
+                <h3 class="craft-grade-title" style="color:${gradeColor(grade)}">${getLocalGrade(grade)}</h3>
                 <div class="craft-recipe-list">
                     ${recipes.map(r => buildRecipeCard(r)).join('')}
                 </div>
@@ -59,7 +65,7 @@ function buildCraftingHTML() {
     return `
         <div class="crafting-panel">
             <div class="crafting-header">
-                <h2>⚒️ 무기 제작</h2>
+                <h2>⚒️ ${t('ui.blacksmith.craft_weapon')}</h2>
                 <button class="craft-close-btn" id="craftCloseBtn">✕</button>
             </div>
             <div class="crafting-body">
@@ -81,7 +87,7 @@ function buildRecipeCard(recipe) {
         const enough = have >= ing.qty;
         return `
             <span class="craft-ingredient ${enough ? 'enough' : 'missing'}">
-                ${item?.emoji || '?'} ${item?.name || ing.id} 
+                ${item?.emoji || '?'} ${item?.nameKey ? t(item.nameKey) : (item?.name || ing.id)} 
                 <span class="craft-ing-count">${have}/${ing.qty}</span>
             </span>
         `;
@@ -92,15 +98,15 @@ function buildRecipeCard(recipe) {
             <div class="craft-result">
                 <span class="craft-result-emoji">${weapon.emoji}</span>
                 <div class="craft-result-info">
-                    <span class="craft-result-name" style="color:${gradeColor(weapon.grade)}">${weapon.name}</span>
-                    <span class="craft-result-stats">DMG ${weapon.dmgMin}–${weapon.dmgMax} · 내구 ${weapon.maxDurability}</span>
+                    <span class="craft-result-name" style="color:${gradeColor(weapon.grade)}">${weapon.nameKey ? t(weapon.nameKey) : weapon.name}</span>
+                    <span class="craft-result-stats">DMG ${weapon.dmgMin}–${weapon.dmgMax} · ${t('ui.equip.durability')} ${weapon.maxDurability}</span>
                 </div>
             </div>
             <div class="craft-ingredients">${ingredientList}</div>
             <button class="craft-btn ${canCraft ? '' : 'disabled'}" 
                     data-recipe="${recipe.result}" 
                     ${canCraft ? '' : 'disabled'}>
-                ${canCraft ? '⚒️ 제작' : '🔒 재료 부족'}
+                ${canCraft ? '⚒️ ' + t('ui.blacksmith.craft') : '🔒 ' + t('ui.blacksmith.not_enough_materials')}
             </button>
         </div>
     `;
@@ -132,11 +138,11 @@ function craftWeapon(weaponId) {
 
     if (!added) {
         // Inventory full — show toast
-        showItemToast('❌ 인벤토리가 가득 찼습니다!');
+        showItemToast('❌ ' + t('ui.blacksmith.inventory_full'));
         return;
     }
 
-    showItemToast(`⚒️ ${newWeapon.name} 제작 완료!`);
+    showItemToast('⚒️ ' + t('ui.blacksmith.craft_complete', { name: newWeapon.nameKey ? t(newWeapon.nameKey) : newWeapon.name }));
 
     // Refresh crafting UI
     if (overlayEl) {
@@ -148,7 +154,7 @@ function craftWeapon(weaponId) {
                 if (recipes.length === 0) return '';
                 return `
                     <div class="craft-grade-section">
-                        <h3 class="craft-grade-title" style="color:${gradeColor(grade)}">${grade}</h3>
+                        <h3 class="craft-grade-title" style="color:${gradeColor(grade)}">${getLocalGrade(grade)}</h3>
                         <div class="craft-recipe-list">
                             ${recipes.map(r => buildRecipeCard(r)).join('')}
                         </div>
