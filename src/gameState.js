@@ -11,11 +11,40 @@ import { MAPS } from './data/maps.js';
 import { t } from './i18n.js';
 import { GRADE_ORDER } from './data/weapons.js';
 
+/**
+ * Look up an item's full definition from master data by ID.
+ * Returns null if not found in any collection.
+ */
+function lookupMasterItem(id) {
+    return ITEMS[id] || WEAPONS[id] || ARMORS[id] || ACCESSORIES[id] || null;
+}
+
+/**
+ * Hydrate a sparse storage item (e.g. {id, qty}) with master data.
+ * If the item already has full metadata (emoji, nameKey), returns as-is.
+ */
+function hydrateStorageItem(item) {
+    if (!item) return null;
+    // If the item is already fully hydrated, skip
+    if (item.emoji && item.nameKey) return item;
+    const master = lookupMasterItem(item.id);
+    if (!master) return item; // Unknown item: keep as-is, can't fix
+    // Merge: master data first, then any overrides from the saved item (qty, durability, etc.)
+    return { ...master, ...item };
+}
+
 function createInitialStorage() {
     const arr = new Array(SETTINGS.initialStorageSlots || 30).fill(null);
     if (SETTINGS.initialItems && SETTINGS.initialItems.length > 0) {
         SETTINGS.initialItems.forEach((item, idx) => {
-            if (idx < arr.length) arr[idx] = { ...item };
+            if (idx < arr.length) {
+                const master = lookupMasterItem(item.id);
+                if (master) {
+                    arr[idx] = { ...master, qty: item.qty ?? 1 };
+                } else {
+                    arr[idx] = { ...item };
+                }
+            }
         });
     }
     return arr;
@@ -146,6 +175,12 @@ export function loadState() {
                 state.shopInvEquipment = new Array(10).fill(null);
             }
 
+            // ─── Data Migration: Hydrate sparse storage items missing metadata ───
+            // Fixes items saved as {id, qty} without emoji/nameKey (e.g. from old initialItems config)
+            if (state.storage) {
+                state.storage = state.storage.map(slot => hydrateStorageItem(slot));
+            }
+
             // ─── Data Migration: Backfill nameKey/descKey for existing wanderers ───
             if (state.recruitedWanderers) {
                 state.recruitedWanderers.forEach(w => {
@@ -158,15 +193,6 @@ export function loadState() {
                         if (!w.classKey) w.classKey = base.classKey;
                         // Determine default class name if possible, or leave as is
                         if (!w.className && base.className) w.className = base.className;
-                        // Traits might need keys too if they weren't stored with keys (but previous step handled trait keys in generation, 
-                        // old wanderers might have traits without keys. Let's fix traits too if possible.
-                        // Actually, traits are stored as full objects in current generation.
-                        // If we want to fully fix existing traits, we'd need to re-map them by ID. 
-                        // Given user just generated them, traits might already be ok from previous session 
-                        // BUT if they were generated BEFORE the trait update, they lack keys.
-                        // Let's rely on nameKey for now. Traits usually get fresh keys if generated new.
-                        // If they are old traits, they might be stuck with hardcoded names unless we map IDs. 
-                        // For now, let's focus on the Wanderer Name/Class which is the user's primary complaint.
                     }
                 });
             }

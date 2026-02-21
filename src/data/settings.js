@@ -4,8 +4,8 @@ export const SETTINGS = {
     initialDiamonds: 0,
     initialStorageSlots: 30,
     initialItems: [
-        { id: "i_herb", qty: 5 },
-        { id: "w_rusty_sword", qty: 1 }
+        { id: "c_herb", qty: 5 },
+        { id: "w_rusty_dagger", qty: 1 }
     ],
 
     // Movement
