@@ -3,6 +3,7 @@ import { getState, checkAndRefreshAll, buyShopItem, performGachaDraw, premiumRef
 import { SETTINGS } from '../../data/settings.js';
 import { getLocName, getLocDesc } from '../../utils/i18nUtils.js';
 import { showToast, formatTimeRemaining } from './townUtils.js';
+import { playSFX } from '../../soundEngine.js';
 
 let currentShopTab = 'consumable';
 
@@ -67,7 +68,7 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
 
     return `
             <div class="shop-item-card ${item.bought ? 'bought' : ''}" style="border-top: 3px solid ${gradeColor};">
-              <div class="shop-item-visual">${item.emoji}</div>
+              <div class="shop-item-visual grade-${item.grade}">${item.emoji}</div>
               <div class="shop-item-name" style="color:${gradeColor};">${getLocName(item)}</div>
               
               <div class="shop-item-tooltip">
@@ -174,7 +175,10 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
   // Buy items (consumable/equipment)
   el.querySelectorAll('.btn-buy').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (buyShopItem(parseInt(btn.dataset.index), btn.dataset.shoptype)) renderShop(el, true, tabToRender);
+      if (buyShopItem(parseInt(btn.dataset.index), btn.dataset.shoptype)) {
+        playSFX('itemPickup');
+        renderShop(el, true, tabToRender);
+      }
     });
   });
 
@@ -183,16 +187,24 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
   if (btnSingle) {
     btnSingle.addEventListener('click', () => {
       const result = performGachaDraw(false);
-      if (result.success) showGachaResult(result.items, false, el, tabToRender);
-      else showToast(t('ui.shop.gacha_no_funds', { amount: 100 }));
+      if (result.success) {
+        playSFX('eventGood');
+        showGachaResult(result.items, false, el, tabToRender);
+      } else {
+        showToast(t('ui.shop.gacha_no_funds', { amount: 100 }));
+      }
     });
   }
   const btnMulti = el.querySelector('#btnGachaMulti');
   if (btnMulti) {
     btnMulti.addEventListener('click', () => {
       const result = performGachaDraw(true);
-      if (result.success) showGachaResult(result.items, true, el, tabToRender);
-      else showToast(t('ui.shop.gacha_no_funds_multi', { amount: 1000 }));
+      if (result.success) {
+        playSFX('eventGood');
+        showGachaResult(result.items, true, el, tabToRender);
+      } else {
+        showToast(t('ui.shop.gacha_no_funds_multi', { amount: 1000 }));
+      }
     });
   }
 

@@ -2,11 +2,12 @@
 // Always-visible inventory panel rendered below the game board.
 // Refreshes in real-time on any item change.
 
-import { getInventory, useItem, equipFromSlot, removeItem, moveToSafeBag, retrieveFromSafeBag } from './inventory.js';
+import { getInventory, useItem, equipFromSlot, removeItem, moveToSafeBag, retrieveFromSafeBag, getWeightStatus } from './inventory.js';
 import { getDungeonState, removeStatusEffect, applyStatusEffect, clearAllStatusEffects } from './dungeonState.js';
 import { getCombatState } from './combatEngine.js';
 import { gradeColor } from './data/weapons.js';
 import { SETTINGS } from './data/settings.js';
+import { playSFX } from './soundEngine.js';
 import { t } from './i18n.js';
 
 // ─── Public API ───
@@ -61,8 +62,9 @@ function buildPanelContent(inv) {
         const durColor = durPct > 30 ? 'var(--gold)' : 'var(--red)';
 
         equipHTML = `
-            <div class="inv-slot-in inv-equip-slot ${isBroken ? 'equip-broken' : ''}" 
-                 data-idx="equip" data-id="${w.id}"
+            <div class="inv-slot-in inv-equip-slot ${isBroken ? 'equip-broken' : ''} grade-${w.grade}" 
+                 data-idx="0" data-type="equip" draggable="true" data-safe="false"
+                 data-id="${w.id}"
                  data-tooltip-title="${w.emoji} ${w.nameKey ? t(w.nameKey) : w.name}"
                  data-tooltip-desc="${w.descKey ? t(w.descKey) : w.desc}"
                  data-tooltip-stats="DMG ${w.dmgMin}~${w.dmgMax} | ${t('ui.equip.durability')} ${w.durability === Infinity ? '∞' : w.durability}">
@@ -73,7 +75,7 @@ function buildPanelContent(inv) {
         `;
     } else {
         equipHTML = `
-            <div class="inv-slot-in inv-equip-slot" data-idx="equip">
+            <div class="inv-slot-in inv-equip-slot" data-idx="0" data-type="equip" data-safe="false">
                 <span class="slot-emoji-in" style="opacity: 0.3;">👊</span>
             </div>
         `;
@@ -81,6 +83,23 @@ function buildPanelContent(inv) {
 
     const slotHTML = inv.slots.map((item, i) => renderSlot(item, i, false)).join('');
     const safeHTML = inv.safeBag.map((item, i) => renderSlot(item, i, true)).join('');
+
+    // Weight bar
+    const ds = getDungeonState ? getDungeonState() : null;
+    const wStatus = getWeightStatus(ds?.wanderer?.str || 0);
+    const wPct = Math.min(100, Math.round(wStatus.ratio * 100));
+    const tierColors = ['#4caf50', '#ffca28', '#ff7043', '#f44336', '#b71c1c'];
+    const wColor = tierColors[wStatus.tier] || '#4caf50';
+    const weightBarHTML = `
+      <div class="weight-bar-container">
+        <div class="weight-bar-label">
+          ${wStatus.icon || '⚖️'} <span>${wStatus.current}/${wStatus.max}</span>
+        </div>
+        <div class="weight-bar">
+          <div class="weight-bar-fill" style="width: ${wPct}%; background: ${wColor};"></div>
+        </div>
+      </div>
+    `;
 
     return `
     <div class="inv-panel-inner">
@@ -94,6 +113,7 @@ function buildPanelContent(inv) {
       <div class="inv-col-main">
         <div class="inv-section-label">${t('ui.inventory.inventory')} (${inv.slots.filter(s => s).length}/12)</div>
         <div class="inv-grid-inline">${slotHTML}</div>
+        ${weightBarHTML}
       </div>
 
       <!-- Right: Safe Bag -->
@@ -111,7 +131,7 @@ function buildPanelContent(inv) {
 
 function renderSlot(item, index, isSafe) {
     if (!item) {
-        return `<div class="inv-slot-in inv-empty-in" data-idx="${index}" data-safe="${isSafe}"></div>`;
+        return `<div class="inv-slot-in inv-empty-in" data-idx="${index}" data-type="${isSafe ? 'safeBag' : 'slots'}" data-safe="${isSafe}"></div>`;
     }
     const qtyBadge = (item.qty && item.qty > 1) ? `<span class="slot-qty">${item.qty}</span>` : '';
     const color = item.grade ? gradeColor(item.grade) : 'var(--text-dim)';
@@ -122,7 +142,7 @@ function renderSlot(item, index, isSafe) {
     else if (item.value) stats = t('ui.equip.effect_amount', { value: item.value });
 
     return `
-    <div class="inv-slot-in inv-has-item-in" data-idx="${index}" data-safe="${isSafe}"
+    <div class="inv-slot-in inv-has-item-in grade-${item.grade}" data-idx="${index}" data-type="${isSafe ? 'safeBag' : 'slots'}" data-safe="${isSafe}" draggable="true"
          data-id="${item.id}"
          data-tooltip-title="${item.emoji} ${item.nameKey ? t(item.nameKey) : item.name}"
          data-tooltip-desc="${item.descKey ? t(item.descKey) : item.desc}"
@@ -142,12 +162,7 @@ function bindPanelSlotActions(panel) {
         el.addEventListener('click', (e) => {
             e.stopPropagation();
             if (el.classList.contains('inv-equip-slot')) {
-                // Equip slot click -> maybe just show info? or unequip? 
-                // Currently unequip is strict swap. Let's just show popup for consistency if needed,
-                // but typically we click inventory to equip. 
-                // Check if user wants interaction on equip slot. 
-                // "Mouse over detail" is requested. Click might be bonus. 
-                // Let's allow simple popup for equipment to see details/unequip(maybe future).
+                // Equip slot popup for future use
             } else {
                 const idx = parseInt(el.dataset.idx);
                 const isSafe = el.dataset.safe === 'true';
@@ -160,6 +175,72 @@ function bindPanelSlotActions(panel) {
         el.addEventListener('mouseleave', () => hideTooltip());
         el.addEventListener('mousemove', (e) => moveTooltip(e));
     });
+
+    // Drag and Drop implementation
+    panel.querySelectorAll('.inv-slot-in').forEach(el => {
+        el.addEventListener('dragstart', (e) => {
+            if (!el.hasAttribute('draggable')) {
+                e.preventDefault();
+                return;
+            }
+            e.dataTransfer.setData('text/srcType', el.dataset.type);
+            e.dataTransfer.setData('text/srcIdx', el.dataset.idx);
+            el.classList.add('dragging');
+        });
+        el.addEventListener('dragend', () => {
+            el.classList.remove('dragging');
+            panel.querySelectorAll('.drag-over').forEach(dst => dst.classList.remove('drag-over'));
+        });
+        el.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            el.classList.add('drag-over');
+        });
+        el.addEventListener('dragleave', () => {
+            el.classList.remove('drag-over');
+        });
+        el.addEventListener('drop', (e) => {
+            e.preventDefault();
+            el.classList.remove('drag-over');
+            handleItemDrop(e, el.dataset.type, parseInt(el.dataset.idx));
+        });
+    });
+}
+
+function handleItemDrop(e, dstType, dstIdx) {
+    const srcType = e.dataTransfer.getData('text/srcType');
+    const srcIdxString = e.dataTransfer.getData('text/srcIdx');
+    if (!srcType || srcIdxString === '') return;
+
+    const srcIdx = parseInt(srcIdxString);
+    if (srcType === dstType && srcIdx === dstIdx) return;
+
+    const inv = getInventory();
+    if (!inv) return;
+
+    const getRef = (type, idx) => {
+        if (type === 'equip') return { parent: inv, key: 'equipped' };
+        if (type === 'slots') return { parent: inv.slots, key: idx };
+        if (type === 'safeBag') return { parent: inv.safeBag, key: idx };
+        return null;
+    };
+
+    const src = getRef(srcType, srcIdx);
+    const dst = getRef(dstType, dstIdx);
+    if (!src || !dst) return;
+
+    const srcItem = src.parent[src.key];
+    const dstItem = dst.parent[dst.key];
+
+    // Cannot swap a non-weapon into the equip slot
+    if (dstType === 'equip' && srcItem && !srcItem.dmgMin) return;
+    if (srcType === 'equip' && dstItem && !dstItem.dmgMin) return;
+
+    // Swap items
+    src.parent[src.key] = dstItem;
+    dst.parent[dst.key] = srcItem;
+
+    playSFX('itemPickup');
+    refreshInlineInventory();
 }
 
 // ─── Tooltip Logic ───

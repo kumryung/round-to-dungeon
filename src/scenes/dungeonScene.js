@@ -6,7 +6,7 @@ import {
   rollSpawnDice, getSpawnPlacements, commitSpawn,
   executeMovePhase, animateMovement,
   handleTileInteraction, advanceWave, getSanityStatus, loadDungeonState, reduceSanity,
-  tickStatuses
+  tickStatuses, triggerUpdate
 } from '../dungeonState.js';
 import { getMonster } from '../data/monsters.js';
 import { initCombat, loadCombatState } from '../combatEngine.js';
@@ -17,7 +17,9 @@ import { rollChestLoot, rollMonsterLoot, ITEMS } from '../data/items.js';
 import { rollEvent } from '../data/events.js';
 import { applyOutcome, showEventModal } from '../eventOverlay.js';
 import { openCraftingOverlay } from '../craftingOverlay.js';
-import { sendToMailbox, getState, clearActiveDungeon, updateDungeonStatus } from '../gameState.js';
+import { sendToMailbox, addItemToStorage, getState, clearActiveDungeon, updateDungeonStatus } from '../gameState.js';
+import { playSFX } from '../soundEngine.js';
+import { screenShake } from '../vfxEngine.js';
 import { t } from '../i18n.js';
 
 
@@ -191,14 +193,31 @@ export function mount(container, params = {}) {
       } else if (resume && ds.activeEvent) {
         // Resume active event modal
         addLog(`[System] 진행 중이던 이벤트를 복원합니다.`);
-        showEventModal(ds.activeEvent, addLog, refreshHUD, refreshInlineInventory, ({ died, forceEncounter }) => {
+        showEventModal(ds.activeEvent, addLog, refreshHUD, refreshInlineInventory, async ({ died, forceEncounter }) => {
           ds.activeEvent = null; // Clear event after choice
           updateDungeonStatus(ds);
           updateSanityVFX(ds);
           if (died) { addLog(t('logs.trap_death')); showGameOver(); return; }
-          if (forceEncounter) addLog('⚔️ 적이 나타났다!');
+          if (forceEncounter) {
+            addLog('⚔️ 적이 나타났다!');
+            const pool = ds.mapData.monsterPool || ['m_slime'];
+            const monsterId = pool[Math.floor(Math.random() * pool.length)];
+            const monsterInstance = getMonster(monsterId, ds.wave);
+            initCombat(ds.wanderer, monsterInstance);
+            await showCombat(monsterInstance, createCombatCallbacks(monsterInstance));
+            return;
+          }
           showMoveUI();
         });
+      } else if (resume && ds.phase === 'move') {
+        // Resume move phase (do not spawn again)
+        showMoveUI();
+        const btnStats = container.querySelector('#btnOpenStats');
+        if (btnStats) {
+          btnStats.addEventListener('click', () => {
+            openLevelUpOverlay(() => renderHUD(container, getDungeonState()));
+          });
+        }
       } else {
         await showWaveTitle(ds.wave);
         startSpawnPhase();
@@ -239,6 +258,7 @@ async function startSpawnPhase() {
   addLog(t('logs.spawn_dice', { monster: rolls.monsterRoll, treasure: rolls.treasureRoll, event: rolls.eventRoll }));
 
   // Show dice results in action panel
+  playSFX('dice');
   actionEl.innerHTML = `
   <div class="spawn-result fade-in">
       <p class="action-label">${t('dungeon_ui.spawn_phase')}</p>
@@ -268,6 +288,10 @@ async function startSpawnPhase() {
     // Tile pop animation
     const tileEl = document.getElementById(`tile-${p.tileIndex}`);
     if (tileEl) {
+      if (p.type === 'monster') playSFX('spawnMonster');
+      else if (p.type === 'chest') playSFX('spawnChest');
+      else playSFX('spawnEvent');
+
       tileEl.classList.add('tile-spawn-pop');
       setTimeout(() => tileEl.classList.remove('tile-spawn-pop'), 600);
     }
@@ -289,6 +313,7 @@ async function startSpawnPhase() {
 
   // Step 4: Transition to move phase
   ds.phase = 'move';
+  triggerUpdate(); // Persist state so refresh doesn't repeat spawn phase
   await delay(400);
   showMoveUI();
 }
@@ -312,6 +337,8 @@ async function handleRollMove() {
   // Disable the button
   const btn = document.getElementById('btnRollMove');
   if (btn) btn.disabled = true;
+
+  playSFX('dice');
 
   // Roll and calculate path
   const result = executeMovePhase();
@@ -402,6 +429,7 @@ async function handleRollMove() {
     if (added) {
       addLog(t('logs.chest_gain', { emoji: loot.emoji, name: loot.nameKey ? t(loot.nameKey) : loot.name }));
       showItemToast(loot);
+      playSFX('itemPickup');
     } else {
       addLog(t('logs.chest_full'));
     }
@@ -412,9 +440,20 @@ async function handleRollMove() {
     return;
   }
 
-  // Event tile: roll random event (new system)
-  if (interaction.type === 'event') {
-    const evt = rollEvent(ds.mapData);
+  // Event tile or Corner tile: roll random event (new system)
+  if (interaction.type === 'event' || interaction.type === 'corner_event') {
+    if (!ds.encounteredEvents) ds.encounteredEvents = [];
+
+    const isThemeBoost = interaction.type === 'corner_event';
+    const evt = rollEvent(ds.mapData, isThemeBoost, ds.encounteredEvents);
+
+    // Track event to prevent duplicates
+    if (evt && evt.id) {
+      ds.encounteredEvents.push(evt.id);
+      ds.eventsEncountered = (ds.eventsEncountered || 0) + 1;
+    }
+
+    // Log the event encounter
     addLog(`${evt.emoji || '❓'} ${t(evt.nameKey || '', evt.name || '이벤트')} - ${t(evt.descKey || '', evt.desc || '')}`);
 
     if (evt.type === 'immediate') {
@@ -438,7 +477,7 @@ async function handleRollMove() {
       ds.activeEvent = evt;
       updateDungeonStatus(ds); // save state with pending event
 
-      showEventModal(evt, addLog, refreshHUD, refreshInlineInventory, ({ died, forceEncounter }) => {
+      showEventModal(evt, addLog, refreshHUD, refreshInlineInventory, async ({ died, forceEncounter }) => {
         ds.activeEvent = null; // Clear event after choice
         updateSanityVFX(ds);
 
@@ -447,8 +486,13 @@ async function handleRollMove() {
 
         if (died) { addLog(t('logs.trap_death')); showGameOver(); return; }
         if (forceEncounter) {
-          // Roll a random encounter next
           addLog('⚔️ 적이 나타났다!');
+          const pool = ds.mapData.monsterPool || ['m_slime'];
+          const monsterId = pool[Math.floor(Math.random() * pool.length)];
+          const monsterInstance = getMonster(monsterId, ds.wave);
+          initCombat(ds.wanderer, monsterInstance);
+          await showCombat(monsterInstance, createCombatCallbacks(monsterInstance));
+          return;
         }
         showMoveUI();
       });
@@ -473,6 +517,9 @@ function createCombatCallbacks(monsterInstance) {
       // Only count non-summon monsters for EXP and loot
       const naturalMonsters = allMonsters ? allMonsters.filter(m => !m.isSummon) : [monsterInstance];
 
+      // Track kills
+      ds.monstersDefeated = (ds.monstersDefeated || 0) + naturalMonsters.length;
+
       // Grant EXP (sum all natural monster EXP)
       const expGained = naturalMonsters.reduce((sum, m) => sum + (m.exp || 10), 0);
       const mName = monsterInstance.nameKey ? t(monsterInstance.nameKey) : monsterInstance.name;
@@ -492,7 +539,6 @@ function createCombatCallbacks(monsterInstance) {
 
       addLog(t('logs.victory', { name: mName }) + ` (+${expGained} EXP)`);
 
-      // Drop loot for each natural monster
       naturalMonsters.forEach(m => {
         const loot = rollMonsterLoot(m);
         if (loot) {
@@ -509,6 +555,7 @@ function createCombatCallbacks(monsterInstance) {
               }
             }, 150);
             showItemToast(loot);
+            playSFX('itemPickup');
           } else {
             addLog(t('logs.inventory_full'));
           }
@@ -544,64 +591,119 @@ function createCombatCallbacks(monsterInstance) {
 
 function showDungeonClear() {
   const actionEl = document.getElementById('actionContent');
-  if (actionEl) {
-    actionEl.innerHTML = '';
+  if (!actionEl) return;
 
-    const container = document.createElement('div');
-    container.className = 'game-over fade-in';
-    container.style.background = 'linear-gradient(180deg, rgba(40,30,15,0.9), rgba(20,15,5,0.9))';
-    container.style.borderColor = 'var(--gold)';
+  const ds = getDungeonState();
+  const inv = getInventory();
 
-    // Victory Label
-    const p1 = document.createElement('p');
-    p1.className = 'action-label';
-    p1.style.color = 'var(--gold)';
-    p1.textContent = t('ui.dungeon.status_cleared', 'Dungeon Cleared');
-    container.appendChild(p1);
+  // Gather all items
+  const allItems = [
+    ...(inv?.slots || []),
+    ...(inv?.safeBag || []),
+    ...(inv?.equipped ? [inv.equipped] : [])
+  ].filter(item => item !== null && item.id !== 'w_fist');
 
-    // Description
-    const p2 = document.createElement('p');
-    p2.className = 'action-desc';
-    p2.textContent = t('dungeon_ui.dungeon_cleared_desc', '무사히 탐험을 마치고 마을로 귀환합니다.');
-    container.appendChild(p2);
+  // Build item list HTML
+  const itemListHTML = allItems.length === 0
+    ? `<p style="color:var(--text-muted);font-size:12px;text-align:center;">아이템 없음</p>`
+    : allItems.map(item => `
+      <div class="grade-${item.grade || 'common'}" style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--bg-card);border-radius:6px;border:1px solid var(--border);">
+        <span style="font-size:18px;">${item.emoji || '📦'}</span>
+        <span style="font-size:12px;color:var(--text);flex:1;">${item.nameKey ? t(item.nameKey) : item.name}</span>
+        ${item.qty && item.qty > 1 ? `<span style="font-size:11px;color:var(--gold);">x${item.qty}</span>` : ''}
+      </div>
+    `).join('');
 
-    // Return Button
-    const btn = document.createElement('button');
-    btn.className = 'btn-action btn-return-town';
-    btn.style.background = 'linear-gradient(180deg, #3a2810, #1a1005)';
-    btn.style.borderColor = 'var(--gold)';
-    btn.style.color = 'var(--gold)';
-    btn.textContent = t('common.confirm', '확인');
-    container.appendChild(btn);
+  actionEl.innerHTML = '';
 
-    actionEl.appendChild(container);
+  const container = document.createElement('div');
+  container.className = 'fade-in';
+  container.style.cssText = `
+    display: flex; flex-direction: column; gap: 12px; padding: 16px;
+    background: linear-gradient(180deg, rgba(20,30,15,0.97), rgba(10,15,5,0.97));
+    border: 1px solid var(--gold-dim); border-radius: 12px; overflow-y: auto; max-height: 100%;
+  `;
 
-    btn.addEventListener('click', () => {
-      const gs = getState();
-      const ds = getDungeonState();
-      const w = ds.wanderer;
+  container.innerHTML = `
+    <div style="text-align:center;">
+      <div style="font-size:36px;">🏆</div>
+      <div style="font-family:var(--font-title);font-size:20px;color:var(--gold);font-weight:800;letter-spacing:1px;">
+        ${t('ui.dungeon.status_cleared', '던전 클리어!')}
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">
+        ${ds.mapData?.nameKey ? t(ds.mapData.nameKey) : (ds.mapData?.name || '던전')} 탐험 완료
+      </div>
+    </div>
 
-      if (w) {
-        // Sync stats back to global wanderer
-        const globalW = gs.recruitedWanderers.find(rw => rw.id === w.id);
-        if (globalW) {
-          globalW.curHp = ds.currentHp;
-          globalW.curSanity = ds.sanity;
-        }
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;">
+        <div style="font-size:22px;">⚔️</div>
+        <div style="font-size:20px;font-weight:700;color:var(--gold);">${ds.monstersDefeated || 0}</div>
+        <div style="font-size:11px;color:var(--text-dim);">처치한 몬스터</div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;">
+        <div style="font-size:22px;">📜</div>
+        <div style="font-size:20px;font-weight:700;color:var(--gold);">${ds.eventsEncountered || 0}</div>
+        <div style="font-size:11px;color:var(--text-dim);">경험한 이벤트</div>
+      </div>
+    </div>
 
-        // Merge Inventory & Safe Bag into storage
-        const allLoot = [
-          ...(ds.inventory?.items || []),
-          ...(ds.inventory?.safeBag || [])
-        ].filter(item => item !== null);
-        gs.storage.push(...allLoot);
+    <div>
+      <div style="font-size:11px;color:var(--text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+        📦 획득 아이템 (${allItems.length}개) → 창고로 이동
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;max-height:140px;overflow-y:auto;">
+        ${itemListHTML}
+      </div>
+    </div>
+
+    <button id="btnDungeonClearConfirm" style="
+      padding:12px; font-size:14px; font-weight:700;
+      background:linear-gradient(135deg, var(--gold-dim), var(--gold));
+      color:#000; border:none; border-radius:8px; cursor:pointer;
+      transition:opacity 0.2s;
+    ">✅ 확인 (아이템 창고 이동 후 귀환)</button>
+  `;
+
+  actionEl.appendChild(container);
+
+  document.getElementById('btnDungeonClearConfirm')?.addEventListener('click', async () => {
+    const gs = getState();
+    const ds = getDungeonState();
+    const w = ds.wanderer;
+    const inv = getInventory();
+
+    if (w) {
+      // Sync stats back to global wanderer
+      const globalW = gs.recruitedWanderers.find(rw => rw.id === w.id);
+      if (globalW) {
+        globalW.curHp = ds.currentHp;
+        globalW.curSanity = ds.sanity;
       }
+    }
 
-      updateDungeonStatus(ds.mapData.id, 'cleared');
-      clearActiveDungeon();
-      changeScene('town');
-    });
-  }
+    // Transfer all items to storage (overflow → mailbox)
+    const itemsToTransfer = [
+      ...(inv?.slots || []),
+      ...(inv?.safeBag || []),
+      ...(inv?.equipped && inv.equipped.id !== 'w_fist' ? [inv.equipped] : []),
+    ].filter(item => item !== null);
+
+    const overflow = [];
+    for (const item of itemsToTransfer) {
+      const added = addItemToStorage(item);
+      if (!added) overflow.push(item);
+    }
+
+    if (overflow.length > 0) {
+      const wName = w?.nameKey ? t(w.nameKey) : (w?.name || '방랑자');
+      sendToMailbox(overflow, `${wName}의 귀환 아이템 (창고 초과)`, 30);
+    }
+
+    updateDungeonStatus(ds.mapData.id, 'cleared');
+    clearActiveDungeon();
+    changeScene('town');
+  });
 }
 
 function showGameOver() {
@@ -688,6 +790,8 @@ function refreshTopbar(ds) {
 async function showWaveTitle(wave) {
   const container = document.querySelector('.dungeon-scene');
   if (!container) return;
+
+  playSFX('waveStart');
 
   const ds = getDungeonState();
   const isFinal = ds.mapData && ds.mapData.maxWave && wave >= ds.mapData.maxWave;

@@ -3,6 +3,7 @@ import { getState, allocateStatPoint, dismissWanderer, buryWanderer, expandRoste
 import { SETTINGS } from '../../data/settings.js';
 import { getLocName, getLocDesc } from '../../utils/i18nUtils.js';
 import { showToast, showConfirmModal } from './townUtils.js';
+import { playSFX } from '../../soundEngine.js';
 
 export function renderWanderers(el) {
   const state = getState();
@@ -71,7 +72,7 @@ export function renderWanderers(el) {
                     <div class="w-stat-item" title="${s.toUpperCase()}">
                       <span class="w-stat-label">${s.toUpperCase().slice(0, 3)}</span>
                       <span class="w-stat-val">${ch[s]}</span>
-                      ${ch.statPoints > 0 && ch.status !== 'dead' ? `<button class="btn-stat-inc-mini" data-id="${ch.id}" data-stat="${s}">+</button>` : ''}
+                      ${ch.statPoints > 0 && ch.status !== 'dead' && s !== 'luk' ? `<button class="btn-stat-inc-mini" data-id="${ch.id}" data-stat="${s}">+</button>` : ''}
                     </div>
                   `).join('')}
                   ${ch.statPoints > 0 ? `<div class="stat-points-avail">+${ch.statPoints}</div>` : ''}
@@ -79,13 +80,13 @@ export function renderWanderers(el) {
 
                 <!-- Equipment (Mini Icons) -->
                 <div class="w-col-equip">
-                  <div class="w-equip-slot ${ch.equipments.weapon ? 'equipped' : ''}" data-id="${ch.id}" data-slot="weapon" title="${t('ui.equip.weapon')}">
+                  <div class="w-equip-slot ${ch.equipments.weapon ? `equipped grade-${ch.equipments.weapon.grade}` : ''}" data-id="${ch.id}" data-slot="weapon" title="${t('ui.equip.weapon')}">
                     ${ch.equipments.weapon ? ch.equipments.weapon.emoji : '✊'}
                   </div>
-                  <div class="w-equip-slot ${ch.equipments.armor ? 'equipped' : ''}" data-id="${ch.id}" data-slot="armor" title="${t('ui.equip.armor')}">
+                  <div class="w-equip-slot ${ch.equipments.armor ? `equipped grade-${ch.equipments.armor.grade}` : ''}" data-id="${ch.id}" data-slot="armor" title="${t('ui.equip.armor')}">
                     ${ch.equipments.armor ? ch.equipments.armor.emoji : '🛡️'}
                   </div>
-                  <div class="w-equip-slot ${ch.equipments.accessory ? 'equipped' : ''}" data-id="${ch.id}" data-slot="accessory" title="${t('ui.equip.accessory')}">
+                  <div class="w-equip-slot ${ch.equipments.accessory ? `equipped grade-${ch.equipments.accessory.grade}` : ''}" data-id="${ch.id}" data-slot="accessory" title="${t('ui.equip.accessory')}">
                     ${ch.equipments.accessory ? ch.equipments.accessory.emoji : '💍'}
                   </div>
                 </div>
@@ -198,6 +199,32 @@ export function renderEquipSelector(wandererId, slot, parentEl) {
     }).join('')}</div>`;
   };
 
+  const renderItemStats = (item) => {
+    const chips = [];
+
+    if (item.type === 'weapon') {
+      chips.push(`<span class="equip-stat-chip stat-dmg">⚔️ DMG ${item.dmgMin}~${item.dmgMax}</span>`);
+      const dur = item.durability === Infinity ? '∞' : item.maxDurability;
+      chips.push(`<span class="equip-stat-chip stat-dur">🛡️ ${t('ui.equip.durability')} ${dur}</span>`);
+    }
+
+    if (item.type === 'armor') {
+      if (item.def) chips.push(`<span class="equip-stat-chip stat-def">🛡️ DEF +${item.def}</span>`);
+      if (item.maxHp) chips.push(`<span class="equip-stat-chip stat-hp">❤️ HP +${item.maxHp}</span>`);
+    }
+
+    if (item.type === 'accessory') {
+      const ACC_STAT_KEYS = ['str', 'agi', 'spd', 'vit', 'dex', 'luk'];
+      const ACC_ICONS = { str: '💪', agi: '🐾', spd: '⚡', vit: '❤️', dex: '🎯', luk: '🍀' };
+      for (const key of ACC_STAT_KEYS) {
+        if (item[key]) chips.push(`<span class="equip-stat-chip stat-acc">${ACC_ICONS[key] || ''} ${STAT_LABEL[key] ?? key} +${item[key]}</span>`);
+      }
+    }
+
+    if (chips.length === 0) return '';
+    return `<div class="item-stat-chips">${chips.join('')}</div>`;
+  };
+
   const canEquip = (item) => {
     const reqs = item.reqStats || {};
     return Object.entries(reqs).every(([stat, val]) => (wanderer?.[stat] ?? 0) >= val);
@@ -216,11 +243,12 @@ export function renderEquipSelector(wandererId, slot, parentEl) {
       : eligibleItems.map(({ item, idx }) => {
         const eligible = canEquip(item);
         return `
-            <div class="selector-item ${eligible ? '' : 'req-not-met'}" data-idx="${idx}">
+            <div class="selector-item ${eligible ? '' : 'req-not-met'} grade-${item.grade}" data-idx="${idx}">
               <span class="item-emoji">${item.emoji}</span>
               <div class="item-info">
                 <div class="item-name">${getLocName(item)}</div>
                 <div class="item-desc">${getLocDesc(item)}</div>
+                ${renderItemStats(item)}
                 ${renderReqStats(item)}
               </div>
               <button class="btn-equip-action btn-town-primary" ${eligible ? '' : 'disabled title="스탯 조건을 충족하지 못했습니다."'}>${t('ui.action.equip')}</button>
@@ -248,6 +276,7 @@ export function renderEquipSelector(wandererId, slot, parentEl) {
         showToast(`스탯 부족: ${missing}`);
         return;
       }
+      playSFX('equip');
       modal.classList.add('hidden');
       renderWanderers(parentEl);
     });
@@ -255,6 +284,7 @@ export function renderEquipSelector(wandererId, slot, parentEl) {
 
   modal.querySelector('.btn-unequip-action').onclick = () => {
     unequipItem(wandererId, slot);
+    playSFX('equip');
     modal.classList.add('hidden');
     renderWanderers(parentEl);
   };

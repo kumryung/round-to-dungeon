@@ -8,6 +8,7 @@ import { getInventory } from './inventory.js';
 import { getCombatState } from './combatEngine.js';
 import { updateDungeonStatus } from './gameState.js';
 import { t } from './i18n.js';
+import { getWeightStatus } from './inventory.js';
 
 /** @type {object} */
 let ds = {};
@@ -35,6 +36,9 @@ export function initDungeonState(tiles, mapData, wanderer) {
         level: 1,
         expToNext: SETTINGS.expTable[0],
         freeStatPoints: 0,
+        encounteredEvents: [],
+        monstersDefeated: 0,
+        eventsEncountered: 0,
         logCallback: null,
         updateCallback: null,
     };
@@ -70,7 +74,7 @@ function log(msg) {
     if (ds.logCallback) ds.logCallback(msg);
 }
 
-function triggerUpdate() {
+export function triggerUpdate() {
     const inv = getInventory();
     if (inv) {
         ds.inventory = {
@@ -162,7 +166,6 @@ export function applyStatusEffect(effect) {
     const durText = effect.duration === Infinity ? '∞' : `${effect.duration}턴`;
     log(`${effect.icon || '⚡'} ${label} 부여됨 (${durText})`);
     triggerUpdate();
-    updateDungeonStatus(ds);
 }
 
 /**
@@ -201,7 +204,6 @@ export function tickStatuses() {
         expired.forEach(id => log(`✅ ${id} 상태이상 종료`));
     }
     triggerUpdate();
-    updateDungeonStatus(ds);
 }
 
 /**
@@ -231,7 +233,6 @@ export function removeStatusEffect(id) {
         log(`✅ ${id} 상태이상 해제됨`);
         triggerUpdate();
         updateVisibility(); // Re-calculate visibility if torch buff is applied/removed
-        updateDungeonStatus(ds);
         return true;
     }
     return false;
@@ -459,7 +460,14 @@ export function executeSpawnPhase() {
  * Returns { roll, steps, stoppedAtStart, finalTile }
  */
 export function executeMovePhase() {
-    const roll = rollDice(1, SETTINGS.moveDiceSides);
+    // Apply weight-based dice cap
+    const weightStatus = getWeightStatus(ds.wanderer?.str || 0);
+    const diceSides = weightStatus.diceMax;
+    if (weightStatus.tier > 0) {
+        log(t('logs.weight_overloaded', { max: diceSides }) + ` ${weightStatus.icon} (${weightStatus.current}/${weightStatus.max})`);
+    }
+
+    const roll = rollDice(1, diceSides);
     ds.turn++;
 
     // Sanity drops by cost per move (unless torch buff active)
@@ -471,7 +479,7 @@ export function executeMovePhase() {
     }
 
     // Tick status effects each move
-    tickStatusEffects();
+    tickStatuses();
 
     const totalTiles = ds.tiles.length;
     let stepsRemaining = roll;
@@ -550,7 +558,8 @@ export function handleTileInteraction() {
     }
 
     if (tile.type === 'corner') {
-        log(t('logs.event_corner'));
+        // Do not log the placeholder event_corner message anymore.
+        // We will process this as a boosted random event in dungeonScene.js
         return { type: 'corner_event', data: null };
     }
 
@@ -622,7 +631,7 @@ export function getSanityStatus(sanity) {
     if (sanity >= 91) return {
         labelKey: 'dungeon_ui.sanity_radiant', class: 'sanity-radiant',
         playerAcc: +10, evasion: +5, preemptive: +15, flee: +15, itemDiscover: +20,
-        allyСrit: 0, sanityDecayMult: 1.0,
+        allyCrit: 0, sanityDecayMult: 1.0,
         monsterAcc: 0, monsterDmg: 0, monsterCrit: 0, ambush: 0,
     };
     if (sanity >= 76) return {

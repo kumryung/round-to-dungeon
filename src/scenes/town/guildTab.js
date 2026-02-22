@@ -32,7 +32,7 @@ export function renderGuild(el, isRefresh = false) {
             <div class="refresh-info-main">
               <span class="refresh-icon">🕒</span>
               <span class="refresh-label">${t('ui.guild.refresh_label')}</span>
-              <span class="refresh-timer" data-timer-type="daily-reset">${timeText}</span>
+              <span class="refresh-timer" data-timer-type="next-hour">${timeText}</span>
             </div>
           </div>
         </div>

@@ -285,7 +285,7 @@ export function renderDungeonPrep(el, map, wanderer) {
 
   function renderGrid() {
     const makeSlotHTML = (slot, i, type, extraStyle = '') => `
-      <div class="storage-slot ${slot ? '' : 'empty'} prep-slot" data-type="${type}" data-index="${i}" ${extraStyle}>
+      <div class="storage-slot ${slot ? `grade-${slot.grade}` : 'empty'} prep-slot" data-type="${type}" data-index="${i}" ${extraStyle}>
         ${slot ? `<span style="pointer-events:none;font-size:1.4em;">${slot.emoji}</span>${slot.qty > 1 ? `<span class="slot-qty" style="pointer-events:none;">${slot.qty}</span>` : ''}<div class="slot-tooltip" style="pointer-events:none;">${getLocName(slot)}<br><small>${getLocDesc(slot)}</small></div>` : ''}
       </div>
     `;

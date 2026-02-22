@@ -226,3 +226,57 @@ export function consumeMaterials(ingredients) {
     }
     return true;
 }
+
+// ─── Weight System ───
+
+/**
+ * Calculate max carrying capacity based on wanderer's STR stat.
+ * @param {number} str - The wanderer's STR stat
+ * @returns {number} Maximum weight
+ */
+export function getMaxWeight(str = 0) {
+    return SETTINGS.baseMaxWeight + str * SETTINGS.strWeightBonus;
+}
+
+/**
+ * Calculate current total weight of all items in inventory.
+ * @returns {number}
+ */
+export function getCurrentWeight() {
+    if (!inv) return 0;
+    let total = 0;
+    const allSlots = [...inv.slots, ...inv.safeBag];
+    if (inv.equipped) allSlots.push(inv.equipped);
+    for (const slot of allSlots) {
+        if (slot) total += (slot.weight || 0) * (slot.qty || 1);
+    }
+    return total;
+}
+
+/**
+ * Get the current weight status tier.
+ * @param {number} str - The wanderer's STR stat
+ * @returns {{ tier: number, ratio: number, diceMax: number, icon: string }}
+ *   tier: 0=optimal, 1=loaded, 2=overloaded, 3=critical, 4=exceeded
+ */
+export function getWeightStatus(str = 0) {
+    const maxW = getMaxWeight(str);
+    const curW = getCurrentWeight();
+    const ratio = maxW > 0 ? curW / maxW : 0;
+
+    const thresholds = SETTINGS.weightThresholds;
+    let tier = 0;
+    for (let i = 0; i < thresholds.length; i++) {
+        if (ratio >= thresholds[i]) tier = i + 1;
+    }
+
+    return {
+        tier,
+        ratio,
+        current: curW,
+        max: maxW,
+        diceMax: SETTINGS.weightDiceMax[tier],
+        icon: SETTINGS.weightTierIcons[tier],
+    };
+}
+

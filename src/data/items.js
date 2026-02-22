@@ -6,132 +6,133 @@ export const ITEMS = {
     // ── Tools ──
     t_shovel: {
         id: 't_shovel', type: 'tool', grade: 'common', nameKey: 'items.t_shovel.name', descKey: 'items.t_shovel.desc', emoji: '⛏️',
-        effect: 'shovel', stackable: false, maxStack: 1, price: 150,
+        effect: 'shovel', stackable: false, maxStack: 1, price: 150, weight: 3,
     },
     t_key: {
         id: 't_key', type: 'tool', grade: 'common', nameKey: 'items.t_key.name', descKey: 'items.t_key.desc', emoji: '🔑',
-        effect: 'key', stackable: true, maxStack: 10, price: 120,
+        effect: 'key', stackable: true, maxStack: 10, price: 120, weight: 1,
     },
     t_holywater: {
         id: 't_holywater', type: 'tool', grade: 'uncommon', nameKey: 'items.t_holywater.name', descKey: 'items.t_holywater.desc', emoji: '💧',
-        effect: 'sanity_restore', value: 30, stackable: true, maxStack: 10, price: 200,
+        effect: 'sanity_restore', value: 30, stackable: true, maxStack: 10, price: 200, weight: 1,
     },
     t_torch: {
         id: 't_torch', type: 'tool', grade: 'common', nameKey: 'items.t_torch.name', descKey: 'items.t_torch.desc', emoji: '🔦',
-        effect: 'torch', stackable: true, maxStack: 10, price: 80,
+        effect: 'torch', stackable: true, maxStack: 10, price: 80, weight: 2,
     },
     // ── Consumables ──
     c_bandage: {
         id: 'c_bandage', type: 'consumable', grade: 'common', nameKey: 'items.c_bandage.name', descKey: 'items.c_bandage.desc', emoji: '🩹',
-        effect: 'heal', value: 15, stackable: true, maxStack: 99, price: 50,
+        effect: 'heal', value: 15, stackable: true, maxStack: 99, price: 50, weight: 1,
     },
     c_splint: {
         id: 'c_splint', type: 'consumable', grade: 'common', nameKey: 'items.c_splint.name', descKey: 'items.c_splint.desc', emoji: '🦴',
-        effect: 'cure_fracture', stackable: true, maxStack: 99, price: 180,
+        effect: 'cure_fracture', stackable: true, maxStack: 99, price: 180, weight: 1,
     },
     c_antidote: {
         id: 'c_antidote', type: 'consumable', grade: 'common', nameKey: 'items.c_antidote.name', descKey: 'items.c_antidote.desc', emoji: '🧪',
-        effect: 'cure_poison', stackable: true, maxStack: 99, price: 150,
+        effect: 'cure_poison', stackable: true, maxStack: 99, price: 150, weight: 1,
     },
     c_herb: {
         id: 'c_herb', type: 'consumable', grade: 'common', nameKey: 'items.c_herb.name', descKey: 'items.c_herb.desc', emoji: '🌿',
-        effect: 'heal', value: 30, stackable: true, maxStack: 99, price: 100,
+        effect: 'heal', value: 30, stackable: true, maxStack: 99, price: 100, weight: 1,
     },
     c_elixir: {
         id: 'c_elixir', type: 'consumable', grade: 'rare', nameKey: 'items.c_elixir.name', descKey: 'items.c_elixir.desc', emoji: '✨',
-        effect: 'full_restore', stackable: true, maxStack: 99, price: 1000,
+        effect: 'full_restore', stackable: true, maxStack: 99, price: 1000, weight: 2,
     },
     c_mega_potion: {
         id: 'c_mega_potion', type: 'consumable', grade: 'magic', nameKey: 'items.c_mega_potion.name', descKey: 'items.c_mega_potion.desc', emoji: '🫙',
-        effect: 'heal', value: 70, stackable: true, maxStack: 99, price: 400,
+        effect: 'heal', value: 70, stackable: true, maxStack: 99, price: 400, weight: 2,
     },
     c_sanity_brew: {
         id: 'c_sanity_brew', type: 'consumable', grade: 'uncommon', nameKey: 'items.c_sanity_brew.name', descKey: 'items.c_sanity_brew.desc', emoji: '🍵',
-        effect: 'sanity_restore', value: 50, stackable: true, maxStack: 99, price: 300,
+        effect: 'sanity_restore', value: 50, stackable: true, maxStack: 99, price: 300, weight: 1,
     },
     c_rage_tonic: {
         id: 'c_rage_tonic', type: 'consumable', grade: 'magic', nameKey: 'items.c_rage_tonic.name', descKey: 'items.c_rage_tonic.desc', emoji: '🔴',
-        effect: 'str_boost', value: 5, duration: 3, stackable: true, maxStack: 30, price: 350,
+        effect: 'str_boost', value: 5, duration: 3, stackable: true, maxStack: 30, price: 350, weight: 1,
     },
     c_stone_skin: {
         id: 'c_stone_skin', type: 'consumable', grade: 'magic', nameKey: 'items.c_stone_skin.name', descKey: 'items.c_stone_skin.desc', emoji: '🪨',
-        effect: 'def_boost', value: 5, duration: 3, stackable: true, maxStack: 30, price: 350,
+        effect: 'def_boost', value: 5, duration: 3, stackable: true, maxStack: 30, price: 350, weight: 1,
     },
     c_ghost_step: {
         id: 'c_ghost_step', type: 'consumable', grade: 'rare', nameKey: 'items.c_ghost_step.name', descKey: 'items.c_ghost_step.desc', emoji: '👻',
-        effect: 'spd_boost', value: 8, duration: 3, stackable: true, maxStack: 20, price: 600,
+        effect: 'spd_boost', value: 8, duration: 3, stackable: true, maxStack: 20, price: 600, weight: 1,
     },
     // ── Materials ──
     mat_wood: {
         id: 'mat_wood', type: 'material', grade: 'common', nameKey: 'items.mat_wood.name', descKey: 'items.mat_wood.desc', emoji: '🪵',
-        stackable: true, maxStack: 99, price: 30,
+        stackable: true, maxStack: 99, price: 30, weight: 2,
     },
     mat_iron_ore: {
         id: 'mat_iron_ore', type: 'material', grade: 'common', nameKey: 'items.mat_iron_ore.name', descKey: 'items.mat_iron_ore.desc', emoji: '🪨',
-        stackable: true, maxStack: 99, price: 50,
+        stackable: true, maxStack: 99, price: 50, weight: 5,
     },
     mat_iron_stud: {
         id: 'mat_iron_stud', type: 'material', grade: 'common', nameKey: 'items.mat_iron_stud.name', descKey: 'items.mat_iron_stud.desc', emoji: '📌',
-        stackable: true, maxStack: 99, price: 80,
+        stackable: true, maxStack: 99, price: 80, weight: 3,
     },
     mat_leather_strap: {
         id: 'mat_leather_strap', type: 'material', grade: 'common', nameKey: 'items.mat_leather_strap.name', descKey: 'items.mat_leather_strap.desc', emoji: '🧵',
-        stackable: true, maxStack: 99, price: 60,
+        stackable: true, maxStack: 99, price: 60, weight: 2,
     },
     mat_sticky_sap: {
         id: 'mat_sticky_sap', type: 'material', grade: 'common', nameKey: 'items.mat_sticky_sap.name', descKey: 'items.mat_sticky_sap.desc', emoji: '🍯',
-        stackable: true, maxStack: 99, price: 70,
+        stackable: true, maxStack: 99, price: 70, weight: 2,
     },
     mat_sharp_blade: {
         id: 'mat_sharp_blade', type: 'material', grade: 'uncommon', nameKey: 'items.mat_sharp_blade.name', descKey: 'items.mat_sharp_blade.desc', emoji: '🔪',
-        stackable: true, maxStack: 99, price: 300,
+        stackable: true, maxStack: 99, price: 300, weight: 3,
     },
     mat_steel_part: {
         id: 'mat_steel_part', type: 'material', grade: 'uncommon', nameKey: 'items.mat_steel_part.name', descKey: 'items.mat_steel_part.desc', emoji: '⚙️',
-        stackable: true, maxStack: 99, price: 400,
+        stackable: true, maxStack: 99, price: 400, weight: 5,
     },
     mat_beast_tendon: {
         id: 'mat_beast_tendon', type: 'material', grade: 'uncommon', nameKey: 'items.mat_beast_tendon.name', descKey: 'items.mat_beast_tendon.desc', emoji: '🪢',
-        stackable: true, maxStack: 99, price: 120,
+        stackable: true, maxStack: 99, price: 120, weight: 2,
     },
     mat_mana_stone: {
         id: 'mat_mana_stone', type: 'material', grade: 'magic', nameKey: 'items.mat_mana_stone.name', descKey: 'items.mat_mana_stone.desc', emoji: '💎',
-        stackable: true, maxStack: 99, price: 500,
+        stackable: true, maxStack: 99, price: 500, weight: 3,
     },
     mat_rune: {
         id: 'mat_rune', type: 'material', grade: 'magic', nameKey: 'items.mat_rune.name', descKey: 'items.mat_rune.desc', emoji: '🔮',
-        stackable: true, maxStack: 99, price: 600,
+        stackable: true, maxStack: 99, price: 600, weight: 3,
     },
     mat_mana_heart: {
         id: 'mat_mana_heart', type: 'material', grade: 'rare', nameKey: 'items.mat_mana_heart.name', descKey: 'items.mat_mana_heart.desc', emoji: '❤️‍🔥',
-        stackable: true, maxStack: 99, price: 1500,
+        stackable: true, maxStack: 99, price: 1500, weight: 4,
     },
     mat_dragon_scale: {
         id: 'mat_dragon_scale', type: 'material', grade: 'epic', nameKey: 'items.mat_dragon_scale.name', descKey: 'items.mat_dragon_scale.desc', emoji: '🐉',
-        stackable: true, maxStack: 99, price: 3000,
+        stackable: true, maxStack: 99, price: 3000, weight: 5,
     },
     mat_ancient_crystal: {
         id: 'mat_ancient_crystal', type: 'material', grade: 'legendary', nameKey: 'items.mat_ancient_crystal.name', descKey: 'items.mat_ancient_crystal.desc', emoji: '🔯',
-        stackable: true, maxStack: 99, price: 8000,
+        stackable: true, maxStack: 99, price: 8000, weight: 4,
     },
     // ── Equipment (Armor/Accessory) — legacy entries kept for save compat ──
     eq_leather_armor: {
         id: 'eq_leather_armor', type: 'armor', grade: 'common', nameKey: 'items.eq_leather_armor.name', descKey: 'items.eq_leather_armor.desc', emoji: '👕',
-        def: 2, stackable: false, maxStack: 1, price: 200,
+        def: 2, stackable: false, maxStack: 1, price: 200, weight: 8,
     },
     eq_iron_ring: {
         id: 'eq_iron_ring', type: 'accessory', grade: 'common', nameKey: 'items.eq_iron_ring.name', descKey: 'items.eq_iron_ring.desc', emoji: '💍',
-        str: 1, stackable: false, maxStack: 1, price: 150,
+        str: 1, stackable: false, maxStack: 1, price: 150, weight: 1,
     },
     // ── Gacha Tickets ──
     i_ticket_silver: {
         id: 'i_ticket_silver', type: 'ticket', grade: 'uncommon', nameKey: 'items.i_ticket_silver.name', descKey: 'items.i_ticket_silver.desc', emoji: '🎫',
-        stackable: true, maxStack: 99, price: 0,
+        stackable: true, maxStack: 99, price: 0, weight: 0,
     },
     i_ticket_gold: {
         id: 'i_ticket_gold', type: 'ticket', grade: 'rare', nameKey: 'items.i_ticket_gold.name', descKey: 'items.i_ticket_gold.desc', emoji: '🎟️',
-        stackable: true, maxStack: 99, price: 0,
+        stackable: true, maxStack: 99, price: 0, weight: 0,
     },
+
     // ── Recipes ──
     rcp_w_oak_club: { id: 'rcp_w_oak_club', type: 'consumable', grade: 'common', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_oak_club.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 100 },
     rcp_w_rusty_dagger: { id: 'rcp_w_rusty_dagger', type: 'consumable', grade: 'common', nameKey: 'items.rcp_prefix', nameParams: { nameKey: 'items.w_rusty_dagger.name' }, emoji: '📜', descKey: 'items.rcp_desc', stackable: true, maxStack: 99, price: 100 },
@@ -197,28 +198,7 @@ export function rollChestLoot() {
     return ITEMS['c_bandage']; // fallback
 }
 
-// ─── Random Events ───
 
-export const EVENTS = [
-    { id: 'heal_spring', nameKey: 'events.heal_spring.name', descKey: 'events.heal_spring.desc', name: '치유의 샘', emoji: '⛲', desc: 'HP +20 회복', effect: 'heal', value: 20 },
-    { id: 'sanity_shrine', nameKey: 'events.sanity_shrine.name', descKey: 'events.sanity_shrine.desc', name: '정신의 성소', emoji: '🕯️', desc: '정신력 +15 회복', effect: 'sanity_restore', value: 15 },
-    { id: 'trap_pit', nameKey: 'events.trap_pit.name', descKey: 'events.trap_pit.desc', name: '함정!', emoji: '🕳️', desc: 'HP -10, 정신력 -5', effect: 'trap', hpDmg: 10, sanityDmg: 5 },
-    { id: 'dark_corner', nameKey: 'events.dark_corner.name', descKey: 'events.dark_corner.desc', name: '어둠의 구석', emoji: '🌑', desc: '정신력 -5', effect: 'sanity_drain', value: 5 },
-    { id: 'treasure_stash', nameKey: 'events.treasure_stash.name', descKey: 'events.treasure_stash.desc', name: '숨겨진 보급품', emoji: '🎁', desc: '랜덤 아이템 획득', effect: 'random_item' },
-    { id: 'rest_spot', nameKey: 'events.rest_spot.name', descKey: 'events.rest_spot.desc', name: '쉬어가는 곳', emoji: '🏕️', desc: 'HP +10, 정신력 +10', effect: 'rest', hpVal: 10, sanityVal: 10 },
-];
-
-/**
- * Roll a random event.
- * @param {string[]} [eventPool] - Optional array of event IDs to choose from (map-specific)
- */
-export function rollEvent(eventPool) {
-    if (eventPool && eventPool.length > 0) {
-        const id = eventPool[Math.floor(Math.random() * eventPool.length)];
-        return EVENTS.find(e => e.id === id) || EVENTS[Math.floor(Math.random() * EVENTS.length)];
-    }
-    return EVENTS[Math.floor(Math.random() * EVENTS.length)];
-}
 
 /**
  * Roll for monster loot.

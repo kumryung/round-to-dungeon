@@ -309,6 +309,169 @@ export const EVENTS_GENERAL = [
             { labelKey: 'events.forsaken_altar.skip', outcomes: [{ weight: 100, logKey: 'events.forsaken_altar.skip' }] },
         ]
     },
+    // ─ Interactive: Broken Wagon ─
+    {
+        id: 'e_wagon', type: 'interactive', emoji: '🛒', nameKey: 'events.wagon.name', descKey: 'events.wagon.desc',
+        choices: [
+            {
+                labelKey: 'events.wagon.search',
+                outcomes: [{ weight: 70, lootMaterial: true, logKey: 'events.wagon.ok' }, { weight: 30, forceEncounter: true, logKey: 'events.wagon.ambush' }]
+            },
+            { labelKey: 'events.wagon.skip', outcomes: [{ weight: 100, logKey: 'events.wagon.skip' }] },
+        ]
+    },
+    // ─ Interactive: Merchant ─
+    {
+        id: 'e_merchant', type: 'interactive', emoji: '💰', nameKey: 'events.merchant.name', descKey: 'events.merchant.desc',
+        choices: [
+            {
+                labelKey: 'events.merchant.buy', lootGold: -100,
+                outcomes: [{ weight: 100, lootMultiple: 3, logKey: 'events.merchant.buy_ok' }]
+            },
+            { labelKey: 'events.merchant.skip', outcomes: [{ weight: 100, logKey: 'events.merchant.skip' }] },
+        ]
+    },
+    // ─ Interactive: Barrel Pile ─
+    {
+        id: 'e_barrels', type: 'interactive', emoji: '🛢️', nameKey: 'events.barrels.name', descKey: 'events.barrels.desc',
+        choices: [
+            {
+                labelKey: 'events.barrels.smash', repairWeaponDmg: 2,
+                outcomes: [{ weight: 80, lootChest: true, logKey: 'events.barrels.ok' }, { weight: 20, hpDmg: 5, logKey: 'events.barrels.empty' }]
+            },
+            { labelKey: 'events.barrels.skip', outcomes: [{ weight: 100, logKey: 'events.barrels.skip' }] },
+        ]
+    },
+    // ─ Interactive: Old Desk ─
+    {
+        id: 'e_desk', type: 'interactive', emoji: '📖', nameKey: 'events.desk.name', descKey: 'events.desk.desc',
+        choices: [
+            {
+                labelKey: 'events.desk.search',
+                outcomes: [{ weight: 50, xpGain: 100, logKey: 'events.desk.ok' }, { weight: 50, sanityDmg: 15, logKey: 'events.desk.bad' }]
+            },
+            { labelKey: 'events.desk.skip', outcomes: [{ weight: 100, logKey: 'events.desk.skip' }] },
+        ]
+    },
+    // ─ Interactive: Caged Treasure ─
+    {
+        id: 'e_cage', type: 'interactive', emoji: '⛓️', nameKey: 'events.cage.name', descKey: 'events.cage.desc',
+        choices: [
+            {
+                labelKey: 'events.cage.key', reqItem: 't_key', consumeItem: true,
+                outcomes: [{ weight: 100, lootEpic: true, logKey: 'events.cage.key_ok' }]
+            },
+            {
+                labelKey: 'events.cage.force', repairWeaponDmg: 8,
+                outcomes: [{ weight: 30, lootChest: true, logKey: 'events.cage.force_ok' }, { weight: 70, logKey: 'events.cage.force_fail' }]
+            },
+        ]
+    },
+    // ─ Interactive: Mural ─
+    {
+        id: 'e_mural', type: 'interactive', emoji: '🎨', nameKey: 'events.mural.name', descKey: 'events.mural.desc',
+        choices: [
+            {
+                labelKey: 'events.mural.study',
+                outcomes: [{ weight: 100, xpGain: 120, sanityDmg: 5, logKey: 'events.mural.ok' }]
+            },
+            { labelKey: 'events.mural.skip', outcomes: [{ weight: 100, logKey: 'events.mural.skip' }] },
+        ]
+    },
+    // ─ Interactive: Glowing Mushroom ─
+    {
+        id: 'e_glow_mush', type: 'interactive', emoji: '🍄', nameKey: 'events.glow_mush.name', descKey: 'events.glow_mush.desc',
+        choices: [
+            {
+                labelKey: 'events.glow_mush.pick',
+                outcomes: [{ weight: 100, lootMaterial: true, sanityHeal: 5, logKey: 'events.glow_mush.ok' }]
+            },
+            { labelKey: 'events.glow_mush.skip', outcomes: [{ weight: 100, logKey: 'events.glow_mush.skip' }] },
+        ]
+    },
+    // ─ Interactive: Tainted Pool ─
+    {
+        id: 'e_pool', type: 'interactive', emoji: '🫧', nameKey: 'events.pool.name', descKey: 'events.pool.desc',
+        choices: [
+            {
+                labelKey: 'events.pool.wash',
+                outcomes: [{ weight: 100, hpDmg: 10, logKey: 'events.pool.wash' }]
+            },
+            {
+                labelKey: 'events.pool.observe',
+                outcomes: [{ weight: 100, sanityDmg: 10, logKey: 'events.pool.observe' }]
+            },
+        ]
+    },
+    // ─ Interactive: Thorn Bush ─
+    {
+        id: 'e_thorns', type: 'interactive', emoji: '🌿', nameKey: 'events.thorns.name', descKey: 'events.thorns.desc',
+        choices: [
+            {
+                labelKey: 'events.thorns.push',
+                outcomes: [{ weight: 100, hpDmg: 5, lootMaterial: true, logKey: 'events.thorns.ok' }]
+            },
+            { labelKey: 'events.thorns.skip', outcomes: [{ weight: 100, logKey: 'events.thorns.skip' }] },
+        ]
+    },
+    // ─ Interactive: Abandoned Bag ─
+    {
+        id: 'e_bag', type: 'interactive', emoji: '🎒', nameKey: 'events.bag.name', descKey: 'events.bag.desc',
+        choices: [
+            {
+                labelKey: 'events.bag.open',
+                outcomes: [{ weight: 70, lootChest: true, logKey: 'events.bag.ok' }, { weight: 30, status: s('poison'), logKey: 'events.bag.snake' }]
+            },
+            { labelKey: 'events.bag.skip', outcomes: [{ weight: 100, logKey: 'events.bag.skip' }] },
+        ]
+    },
+    // ─ Interactive: Madman's Scrawlings ─
+    {
+        id: 'e_scrawl', type: 'interactive', emoji: '✍️', nameKey: 'events.scrawl.name', descKey: 'events.scrawl.desc',
+        choices: [
+            {
+                labelKey: 'events.scrawl.read',
+                outcomes: [{ weight: 40, xpGain: 250, logKey: 'events.scrawl.ok' }, { weight: 60, sanityDmg: 25, logKey: 'events.scrawl.fail' }]
+            },
+            { labelKey: 'events.scrawl.skip', outcomes: [{ weight: 100, logKey: 'events.scrawl.skip' }] },
+        ]
+    },
+    // ─ Interactive: Illusionary Butterflies ─
+    {
+        id: 'e_butterflies', type: 'interactive', emoji: '🦋', nameKey: 'events.butterflies.name', descKey: 'events.butterflies.desc',
+        choices: [
+            {
+                labelKey: 'events.butterflies.follow',
+                outcomes: [{ weight: 100, sanityHeal: 30, logKey: 'events.butterflies.follow' }]
+            },
+            {
+                labelKey: 'events.butterflies.catch',
+                outcomes: [{ weight: 100, lootMaterial: true, forceEncounter: true, logKey: 'events.butterflies.catch' }]
+            },
+        ]
+    },
+    // ─ Interactive: Old Instrument ─
+    {
+        id: 'e_instrument', type: 'interactive', emoji: '🪕', nameKey: 'events.instrument.name', descKey: 'events.instrument.desc',
+        choices: [
+            {
+                labelKey: 'events.instrument.play',
+                outcomes: [{ weight: 50, sanityHeal: 15, logKey: 'events.instrument.ok' }, { weight: 50, forceEncounter: true, logKey: 'events.instrument.fail' }]
+            },
+            { labelKey: 'events.instrument.skip', outcomes: [{ weight: 100, logKey: 'events.instrument.skip' }] },
+        ]
+    },
+    // ─ Interactive: Mysterious Tapestry ─
+    {
+        id: 'e_tapestry', type: 'interactive', emoji: '🖼️', nameKey: 'events.tapestry.name', descKey: 'events.tapestry.desc',
+        choices: [
+            {
+                labelKey: 'events.tapestry.look_behind',
+                outcomes: [{ weight: 60, lootChest: true, logKey: 'events.tapestry.ok' }, { weight: 40, forceEncounter: true, logKey: 'events.tapestry.bat' }]
+            },
+            { labelKey: 'events.tapestry.skip', outcomes: [{ weight: 100, logKey: 'events.tapestry.skip' }] },
+        ]
+    },
 ];
 
 // ── THEME-SPECIFIC EVENTS ──
@@ -752,23 +915,53 @@ export const EVENTS_THEME = {
  * @param {object} mapData
  * @param {string[]} [mapData.eventPool] - IDs of generic events allowed in this map
  * @param {string} [mapData.theme] - Theme key for themed event pool
+ * @param {boolean} [isThemeBoost=false] - If true, drastically increases the chance of themed event
+ * @param {string[]} [encounteredEvents=[]] - List of event IDs already encountered to prevent duplicates
  */
-export function rollEvent(mapData) {
+export function rollEvent(mapData, isThemeBoost = false, encounteredEvents = []) {
     const theme = mapData?.theme;
     const themeEvents = (theme && EVENTS_THEME[theme]) ? EVENTS_THEME[theme] : [];
     const pool = mapData?.eventPool || [];
 
-    // 40% chance to pick themed event if available, else general pool
-    if (themeEvents.length > 0 && Math.random() < 0.4) {
+    // Helper to filter out already encountered events
+    const filterNew = (arr) => arr.filter(e => {
+        // e might be an ID string (for pool) or an event object (themeEvents, EVENTS_GENERAL)
+        const id = typeof e === 'string' ? e : e.id;
+        return !encounteredEvents.includes(id);
+    });
+
+    const newThemeEvents = filterNew(themeEvents);
+    const newPool = filterNew(pool);
+    const newGeneral = filterNew(EVENTS_GENERAL);
+
+    // 40% chance to pick themed event if available (or 80% if boosted), else general pool
+    const themeChance = isThemeBoost ? 0.8 : 0.4;
+
+    // Try theme events first
+    if (newThemeEvents.length > 0 && Math.random() < themeChance) {
+        return newThemeEvents[Math.floor(Math.random() * newThemeEvents.length)];
+    } else if (themeEvents.length > 0 && Math.random() < themeChance) {
+        // Fallback to duplicates if all new ones are exhausted
         return themeEvents[Math.floor(Math.random() * themeEvents.length)];
     }
 
-    if (pool.length > 0) {
+    // Try map specific pool
+    if (newPool.length > 0) {
+        const id = newPool[Math.floor(Math.random() * newPool.length)];
+        const found = EVENTS_GENERAL.find(e => e.id === id);
+        if (found) return found;
+    } else if (pool.length > 0) {
         const id = pool[Math.floor(Math.random() * pool.length)];
         const found = EVENTS_GENERAL.find(e => e.id === id);
         if (found) return found;
     }
 
+    // Fallback to general pool
+    if (newGeneral.length > 0) {
+        return newGeneral[Math.floor(Math.random() * newGeneral.length)];
+    }
+
+    // Absolute fallback if everything is used up
     return EVENTS_GENERAL[Math.floor(Math.random() * EVENTS_GENERAL.length)];
 }
 

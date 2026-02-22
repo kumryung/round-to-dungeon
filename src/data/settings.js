@@ -92,4 +92,13 @@ export const SETTINGS = {
     // Visibility (Fog of War)
     baseViewDistance: 2,     // Base tile view range
     torchViewBonus: 2,       // Additional view range with torch
+
+    // ─── Weight System ───
+    baseMaxWeight: 50,                          // Base carrying capacity (regardless of STR)
+    strWeightBonus: 5,                          // Extra carry weight per 1 STR
+    // Weight ratio thresholds [optimal end, loaded end, overloaded end, critical end]
+    weightThresholds: [0.5, 0.75, 0.90, 1.0],
+    // Move dice max values per tier [optimal, loaded, overloaded, critical, exceeded]
+    weightDiceMax: [6, 5, 4, 3, 2],
+    weightTierIcons: ['', '⚖️', '🎒', '🐢', '❌'],
 };

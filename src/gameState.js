@@ -19,18 +19,15 @@ function lookupMasterItem(id) {
     return ITEMS[id] || WEAPONS[id] || ARMORS[id] || ACCESSORIES[id] || null;
 }
 
-/**
- * Hydrate a sparse storage item (e.g. {id, qty}) with master data.
- * If the item already has full metadata (emoji, nameKey), returns as-is.
- */
 function hydrateStorageItem(item) {
     if (!item) return null;
-    // If the item is already fully hydrated, skip
-    if (item.emoji && item.nameKey) return item;
     const master = lookupMasterItem(item.id);
     if (!master) return item; // Unknown item: keep as-is, can't fix
-    // Merge: master data first, then any overrides from the saved item (qty, durability, etc.)
-    return { ...master, ...item };
+    // Merge: master data first, then any overrides from the saved item (like varying durability, qty)
+    // To ensure things like reqStats are always updated to the latest master values, we overwrite carefully.
+    // For arrays or objects like reqStats, we want the master's version unless the instance mutated it.
+    // In this game, reqStats are static, so overriding them with master is unconditionally safe.
+    return { ...item, ...master, qty: item.qty, durability: item.durability };
 }
 
 function createInitialStorage() {
@@ -56,6 +53,12 @@ const state = {
 
     /** @type {number} 보유 다이아몬드 */
     diamonds: SETTINGS.initialDiamonds !== undefined ? SETTINGS.initialDiamonds : 0,
+
+    /** @type {boolean} 음소거 여부 */
+    isMuted: false,
+
+    /** @type {number} 전역 볼륨 (0.0 ~ 1.0) */
+    globalVolume: 0.5,
 
     /** @type {string} 현재 언어 (ko/en/ja) */
     language: 'ko',
@@ -179,6 +182,17 @@ export function loadState() {
             // Fixes items saved as {id, qty} without emoji/nameKey (e.g. from old initialItems config)
             if (state.storage) {
                 state.storage = state.storage.map(slot => hydrateStorageItem(slot));
+            }
+
+            // Hydrate player's equipments as well
+            if (state.recruitedWanderers) {
+                state.recruitedWanderers.forEach(w => {
+                    if (w.equipments) {
+                        if (w.equipments.weapon) w.equipments.weapon = hydrateStorageItem(w.equipments.weapon);
+                        if (w.equipments.armor) w.equipments.armor = hydrateStorageItem(w.equipments.armor);
+                        if (w.equipments.accessory) w.equipments.accessory = hydrateStorageItem(w.equipments.accessory);
+                    }
+                });
             }
 
             // ─── Data Migration: Backfill nameKey/descKey for existing wanderers ───
@@ -816,6 +830,7 @@ export function setActiveDungeon(ds) {
 
 export function clearActiveDungeon() {
     state.activeDungeon = null;
+    saveState();
     generateAvailableDungeons();
 }
 
@@ -977,6 +992,7 @@ export function addExpToWanderer(wandererId, amount) {
         // HP/정신력 회복 (선택 사항)
         wanderer.curSanity = Math.min(wanderer.maxSanity, wanderer.curSanity + 20);
     }
+    saveState();
 }
 
 export function selectMap(map) {

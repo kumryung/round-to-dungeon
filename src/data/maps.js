@@ -10,7 +10,7 @@ export const MAPS = [
         id: 'map_01_forest',
         nameKey: 'maps.map_01_forest.name',
         name: '고블린 숲',
-        nameEn: 'Goblin Forest',
+
         icon: '🌲',
         theme: 'forest',
         unlockTownLv: 1,
@@ -19,14 +19,14 @@ export const MAPS = [
         tiles: 24,
         dice: { monster: [1, 3], treasure: [2, 4], event: [2, 4] },
         monsterPool: ['m_goblin', 'm_bat', 'm_slime'],
-        eventPool: ['heal_spring', 'treasure_stash', 'rest_spot', 'trap_pit', 'e_mushroom', 'e_campfire'],
+        eventPool: ['heal_spring', 'treasure_stash', 'rest_spot', 'trap_pit', 'e_mushroom', 'e_campfire', 'e_wagon', 'e_bag'],
         desc: '울창한 숲 속에 고블린과 박쥐가 횡행하는 초보 모험가의 시험장.',
     },
     {
         id: 'map_01_mine',
         nameKey: 'maps.map_01_mine.name',
         name: '얕은 광산',
-        nameEn: 'Shallow Mine',
+
         icon: '⛏️',
         theme: 'mine',
         unlockTownLv: 1,
@@ -35,14 +35,14 @@ export const MAPS = [
         tiles: 24,
         dice: { monster: [1, 3], treasure: [2, 4], event: [1, 3] },
         monsterPool: ['m_goblin', 'm_bat', 'm_slime'],
-        eventPool: ['trap_pit', 'dark_corner', 'treasure_stash', 'rest_spot', 'e_anvil', 'e_cobweb'],
+        eventPool: ['trap_pit', 'dark_corner', 'treasure_stash', 'rest_spot', 'e_anvil', 'e_cobweb', 'e_barrels', 'e_merchant'],
         desc: '갓 파헤쳐진 얕은 광산. 아직 위험은 크지 않지만 어둠이 짙다.',
     },
     {
         id: 'map_01_ruins',
         nameKey: 'maps.map_01_ruins.name',
         name: '허물어진 마을',
-        nameEn: 'Ruined Village',
+
         icon: '🏚️',
         theme: 'ruins',
         unlockTownLv: 1,
@@ -51,7 +51,7 @@ export const MAPS = [
         tiles: 24,
         dice: { monster: [1, 3], treasure: [2, 4], event: [2, 4] },
         monsterPool: ['m_goblin', 'm_summoner', 'm_slime'],
-        eventPool: ['heal_spring', 'rest_spot', 'e_corpse', 'e_grave', 'trap_pit', 'treasure_stash'],
+        eventPool: ['heal_spring', 'rest_spot', 'e_corpse', 'e_grave', 'trap_pit', 'treasure_stash', 'e_mural', 'e_desk'],
         desc: '오래전 불에 탄 폐허마을. 고블린들이 점거했지만 잔해 속에 보물이 숨어있다.',
     },
 
@@ -60,7 +60,7 @@ export const MAPS = [
         id: 'map_02_mine',
         nameKey: 'maps.map_02_mine.name',
         name: '버려진 광산',
-        nameEn: 'Abandoned Mine',
+
         icon: '🪨',
         theme: 'mine',
         unlockTownLv: 2,
@@ -76,7 +76,7 @@ export const MAPS = [
         id: 'map_02_swamp',
         nameKey: 'maps.map_02_swamp.name',
         name: '진흙 늪지',
-        nameEn: 'Muddy Swampland',
+
         icon: '🌿',
         theme: 'swamp',
         unlockTownLv: 2,
@@ -85,14 +85,14 @@ export const MAPS = [
         tiles: 28,
         dice: { monster: [2, 4], treasure: [1, 3], event: [2, 4] },
         monsterPool: ['m_slime', 'm_poison_slime', 'm_bat'],
-        eventPool: ['sanity_shrine', 'trap_pit', 'e_mushroom', 'e_soul', 'heal_spring', 'rest_spot'],
+        eventPool: ['sanity_shrine', 'trap_pit', 'e_mushroom', 'e_soul', 'heal_spring', 'rest_spot', 'e_glow_mush', 'e_pool'],
         desc: '독성 가스가 자욱한 늪지. 슬라임들이 독성 웅덩이를 이루며 번식한다.',
     },
     {
         id: 'map_02_ruins',
         nameKey: 'maps.map_02_ruins.name',
         name: '고대 사원 입구',
-        nameEn: 'Ancient Temple Entrance',
+
         icon: '🏛️',
         theme: 'ruins',
         unlockTownLv: 2,
@@ -110,7 +110,7 @@ export const MAPS = [
         id: 'map_03_swamp',
         nameKey: 'maps.map_03_swamp.name',
         name: '유령의 늪',
-        nameEn: 'Ghost Swamp',
+
         icon: '👻',
         theme: 'swamp',
         unlockTownLv: 3,
@@ -126,7 +126,7 @@ export const MAPS = [
         id: 'map_03_forest',
         nameKey: 'maps.map_03_forest.name',
         name: '마수의 숲',
-        nameEn: 'Beastwood',
+
         icon: '🌳',
         theme: 'forest',
         unlockTownLv: 3,
@@ -135,14 +135,14 @@ export const MAPS = [
         tiles: 32,
         dice: { monster: [2, 4], treasure: [2, 4], event: [2, 4] },
         monsterPool: ['m_orc', 'm_goblin_king', 'm_treant'],
-        eventPool: ['heal_spring', 'e_mushroom', 'e_campfire', 'e_injured_adv', 'e_goblin_peddler', 'trap_pit'],
+        eventPool: ['heal_spring', 'e_mushroom', 'e_campfire', 'e_injured_adv', 'e_goblin_peddler', 'trap_pit', 'e_thorns', 'e_butterflies'],
         desc: '거대한 나무들이 하늘을 가린 심층 숲. 트렌트와 맹수들이 서식한다.',
     },
     {
         id: 'map_03_mine',
         nameKey: 'maps.map_03_mine.name',
         name: '심층 갱도',
-        nameEn: 'Deep Shaft',
+
         icon: '🕳️',
         theme: 'mine',
         unlockTownLv: 3,
@@ -151,7 +151,7 @@ export const MAPS = [
         tiles: 32,
         dice: { monster: [2, 5], treasure: [1, 3], event: [1, 3] },
         monsterPool: ['m_skeleton', 'm_warlock', 'm_goblin_king'],
-        eventPool: ['trap_pit', 'dark_corner', 'e_cobweb', 'e_bandit_cache', 'e_idol', 'treasure_stash'],
+        eventPool: ['trap_pit', 'dark_corner', 'e_cobweb', 'e_bandit_cache', 'e_idol', 'treasure_stash', 'e_cage', 'e_scrawl'],
         desc: '채굴 중단된 심층 갱도. 갇혀 죽은 광부의 원혼과 암흑 사제가 배회한다.',
     },
 
@@ -160,7 +160,7 @@ export const MAPS = [
         id: 'map_04_ruins',
         nameKey: 'maps.map_04_ruins.name',
         name: '고대 유적',
-        nameEn: 'Ancient Ruins',
+
         icon: '🏛️',
         theme: 'ruins',
         unlockTownLv: 4,
@@ -176,7 +176,7 @@ export const MAPS = [
         id: 'map_04_citadel',
         nameKey: 'maps.map_04_citadel.name',
         name: '요새 외벽',
-        nameEn: 'Fortress Walls',
+
         icon: '🧱',
         theme: 'citadel',
         unlockTownLv: 4,
@@ -192,7 +192,7 @@ export const MAPS = [
         id: 'map_04_desert',
         nameKey: 'maps.map_04_desert.name',
         name: '모래폭풍 사막',
-        nameEn: 'Sandstorm Desert',
+
         icon: '🏜️',
         theme: 'desert',
         unlockTownLv: 4,
@@ -210,7 +210,7 @@ export const MAPS = [
         id: 'map_05_citadel',
         nameKey: 'maps.map_05_citadel.name',
         name: '암흑 성채',
-        nameEn: 'Dark Citadel',
+
         icon: '🏰',
         theme: 'citadel',
         unlockTownLv: 5,
@@ -226,7 +226,7 @@ export const MAPS = [
         id: 'map_05_swamp',
         nameKey: 'maps.map_05_swamp.name',
         name: '저주받은 늪',
-        nameEn: 'Cursed Bog',
+
         icon: '🌑',
         theme: 'swamp',
         unlockTownLv: 5,
@@ -242,7 +242,7 @@ export const MAPS = [
         id: 'map_05_volcano',
         nameKey: 'maps.map_05_volcano.name',
         name: '화산 기슭',
-        nameEn: 'Volcanic Foothills',
+
         icon: '🌋',
         theme: 'volcano',
         unlockTownLv: 5,
@@ -260,7 +260,7 @@ export const MAPS = [
         id: 'map_06_volcano',
         nameKey: 'maps.map_06_volcano.name',
         name: '불타는 화산',
-        nameEn: 'Blazing Volcano',
+
         icon: '🔥',
         theme: 'volcano',
         unlockTownLv: 6,
@@ -276,7 +276,7 @@ export const MAPS = [
         id: 'map_06_desert',
         nameKey: 'maps.map_06_desert.name',
         name: '타오르는 사막',
-        nameEn: 'Scorching Desert',
+
         icon: '☀️',
         theme: 'desert',
         unlockTownLv: 6,
@@ -285,14 +285,14 @@ export const MAPS = [
         tiles: 44,
         dice: { monster: [3, 5], treasure: [1, 2], event: [2, 4] },
         monsterPool: ['m_skeleton', 'm_warlock', 'm_mimic'],
-        eventPool: ['e_well', 'e_idol', 'trap_pit', 'dark_corner', 'e_bandit_cache', 'e_tome'],
+        eventPool: ['e_well', 'e_idol', 'trap_pit', 'dark_corner', 'e_bandit_cache', 'e_tome', 'e_instrument', 'e_tapestry'],
         desc: '작열하는 태양 아래 끝없이 펼쳐진 사막. 신기루와 함정이 탐험자를 미혹한다.',
     },
     {
         id: 'map_06_crypt',
         nameKey: 'maps.map_06_crypt.name',
         name: '석관 지하실',
-        nameEn: 'Sarcophagus Cellar',
+
         icon: '⚰️',
         theme: 'crypt',
         unlockTownLv: 6,
@@ -310,7 +310,7 @@ export const MAPS = [
         id: 'map_07_desert',
         nameKey: 'maps.map_07_desert.name',
         name: '마르지 않는 사막',
-        nameEn: 'Endless Desert',
+
         icon: '🏜️',
         theme: 'desert',
         unlockTownLv: 7,
@@ -342,7 +342,7 @@ export const MAPS = [
         id: 'map_07_snow',
         nameKey: 'maps.map_07_snow.name',
         name: '눈보라 고원',
-        nameEn: 'Blizzard Plateau',
+
         icon: '❄️',
         theme: 'snow',
         unlockTownLv: 7,
@@ -360,7 +360,7 @@ export const MAPS = [
         id: 'map_08_snow',
         nameKey: 'maps.map_08_snow.name',
         name: '얼어붙은 설원',
-        nameEn: 'Frozen Tundra',
+
         icon: '🌨️',
         theme: 'snow',
         unlockTownLv: 8,
@@ -376,7 +376,7 @@ export const MAPS = [
         id: 'map_08_volcano',
         nameKey: 'maps.map_08_volcano.name',
         name: '화염 심층부',
-        nameEn: 'Deep Fire Cavern',
+
         icon: '💥',
         theme: 'volcano',
         unlockTownLv: 8,
@@ -392,7 +392,7 @@ export const MAPS = [
         id: 'map_08_crypt',
         nameKey: 'maps.map_08_crypt.name',
         name: '망각의 묘지',
-        nameEn: 'Tomb of Oblivion',
+
         icon: '💀',
         theme: 'crypt',
         unlockTownLv: 8,
@@ -410,7 +410,7 @@ export const MAPS = [
         id: 'map_09_abyss',
         nameKey: 'maps.map_09_abyss.name',
         name: '심연의 문턱',
-        nameEn: 'Abyss Threshold',
+
         icon: '🌌',
         theme: 'abyss',
         unlockTownLv: 9,
@@ -442,7 +442,7 @@ export const MAPS = [
         id: 'map_09_snow',
         nameKey: 'maps.map_09_snow.name',
         name: '세계의 끝',
-        nameEn: 'Edge of the World',
+
         icon: '🏔️',
         theme: 'snow',
         unlockTownLv: 9,
@@ -460,7 +460,7 @@ export const MAPS = [
         id: 'map_10_abyss',
         nameKey: 'maps.map_10_abyss.name',
         name: '끝없는 심연',
-        nameEn: 'Endless Abyss',
+
         icon: '⚫',
         theme: 'abyss',
         unlockTownLv: 10,
@@ -476,7 +476,7 @@ export const MAPS = [
         id: 'map_10_void',
         nameKey: 'maps.map_10_void.name',
         name: '공허의 왕좌',
-        nameEn: 'Throne of the Void',
+
         icon: '🌀',
         theme: 'abyss',
         unlockTownLv: 10,
@@ -492,7 +492,7 @@ export const MAPS = [
         id: 'map_10_citadel',
         nameKey: 'maps.map_10_citadel.name',
         name: '황혼의 성채',
-        nameEn: 'Twilight Citadel',
+
         icon: '🌑',
         theme: 'citadel',
         unlockTownLv: 10,

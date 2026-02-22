@@ -8,6 +8,9 @@ import { weightedPick } from './data/events.js';
 import { rollChestLoot, ITEMS } from './data/items.js';
 import { addItem } from './inventory.js';
 import { showItemToast } from './inventoryOverlay.js';
+import { addGold } from './gameState.js';
+import { playSFX } from './soundEngine.js';
+import { screenShake, screenFlash } from './vfxEngine.js';
 
 /**
  * Apply a resolved event outcome object to the dungeon state.
@@ -22,42 +25,66 @@ export function applyOutcome(outcome, addLog, refreshHUD, refreshInv) {
 
     if (outcome.logKey) addLog(t(outcome.logKey, outcome.logKey));
 
+    let isPositive = false;
+    let isNegative = false;
+
     // HP changes (flat)
     if (outcome.hpDmg) {
         ds.currentHp = Math.max(0, ds.currentHp - outcome.hpDmg);
         addLog(`❤️ HP -${outcome.hpDmg}`);
+        isNegative = true;
     }
     if (outcome.hpHeal) {
         ds.currentHp = Math.min(ds.maxHp, ds.currentHp + outcome.hpHeal);
+        isPositive = true;
     }
     // HP changes (percent)
     if (outcome.hpDmgPct) {
         const dmg = Math.floor(ds.maxHp * outcome.hpDmgPct);
         ds.currentHp = Math.max(0, ds.currentHp - dmg);
         addLog(`❤️ HP -${dmg}`);
+        isNegative = true;
     }
     if (outcome.hpHealPct) {
         const heal = Math.floor(ds.maxHp * Math.min(outcome.hpHealPct, 1.0));
         ds.currentHp = Math.min(ds.maxHp, ds.currentHp + heal);
+        isPositive = true;
     }
 
     // Sanity changes
-    if (outcome.sanityDmg) reduceSanity(outcome.sanityDmg);
-    if (outcome.sanityHeal) ds.sanity = Math.min(ds.maxSanity, ds.sanity + outcome.sanityHeal);
-    if (outcome.sanityDmgPct) reduceSanity(Math.floor(ds.maxSanity * outcome.sanityDmgPct));
-    if (outcome.sanityHealPct) ds.sanity = Math.min(ds.maxSanity, ds.sanity + Math.floor(ds.maxSanity * outcome.sanityHealPct));
+    if (outcome.sanityDmg) { reduceSanity(outcome.sanityDmg); isNegative = true; }
+    if (outcome.sanityHeal) { ds.sanity = Math.min(ds.maxSanity, ds.sanity + outcome.sanityHeal); isPositive = true; }
+    if (outcome.sanityDmgPct) { reduceSanity(Math.floor(ds.maxSanity * outcome.sanityDmgPct)); isNegative = true; }
+    if (outcome.sanityHealPct) { ds.sanity = Math.min(ds.maxSanity, ds.sanity + Math.floor(ds.maxSanity * outcome.sanityHealPct)); isPositive = true; }
 
     // Status effects
-    if (outcome.status) applyStatusEffect(outcome.status);
-    if (outcome.status2) applyStatusEffect(outcome.status2);
+    let gotStatus = false;
+    if (outcome.status) { applyStatusEffect(outcome.status); gotStatus = true; }
+    if (outcome.status2) { applyStatusEffect(outcome.status2); gotStatus = true; }
 
     // XP
-    if (outcome.xpGain) grantExp(outcome.xpGain);
+    if (outcome.xpGain) { grantExp(outcome.xpGain); isPositive = true; }
+
+    // Play appropriate VFX/SFX based on what happened
+    if (isNegative && (outcome.hpDmg || outcome.hpDmgPct || outcome.sanityDmg || outcome.sanityDmgPct)) {
+        playSFX('trap');
+        screenShake(5, 400);
+        screenFlash(outcome.hpDmg || outcome.hpDmgPct ? 'rgba(255, 0, 0, 0.2)' : 'rgba(138, 43, 226, 0.2)', 300);
+    } else if (isPositive && (outcome.hpHeal || outcome.hpHealPct || outcome.sanityHeal || outcome.sanityHealPct)) {
+        playSFX('heal');
+        screenFlash('rgba(0, 255, 128, 0.15)', 400);
+    } else if (gotStatus) {
+        playSFX('statusEffect');
+    } else if (isPositive) {
+        playSFX('eventGood');
+    } else if (isNegative) {
+        playSFX('eventBad');
+    } // else neutral logic (no sound or just a click)
 
     // Gold
     if (outcome.lootGold) {
-        // handled by gameState via addLog for now - future: import addGold
-        addLog(`💰 골드 ${outcome.lootGold > 0 ? '+' : ''}${outcome.lootGold}`);
+        addGold(outcome.lootGold);
+        addLog(`💰 ${t('logs.gold_gained', { amount: outcome.lootGold })}`);
     }
 
     // Loot
@@ -113,6 +140,7 @@ export function applyOutcome(outcome, addLog, refreshHUD, refreshInv) {
  * @param {function} onDone    - Called after choice resolved (isDead: boolean, forceEncounter: boolean)
  */
 export function showEventModal(evt, addLog, refreshHUD, refreshInv, onDone) {
+    playSFX('open');
     const inv = getInventory();
     const overlay = document.createElement('div');
     overlay.className = 'event-overlay';

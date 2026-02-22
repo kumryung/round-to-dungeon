@@ -81,9 +81,10 @@ export function initCombat(wanderer, monster) {
  * Advance the tick counter to find the next actor.
  * Subtracts the minimum currentTick from all combatants.
  * Sets combat.nextTurn to 'player' or monster index.
+ * @returns {number} The amount of tick that was advanced (minTick)
  */
 export function advanceTick() {
-    if (!combat) return;
+    if (!combat) return 0;
 
     const allActors = [
         { key: 'player', ref: combat.player },
@@ -104,10 +105,11 @@ export function advanceTick() {
     const next = atZero[0];
     if (next) {
         combat.nextTurn = next.key === 'player' ? 'player' : 'monster';
-        if (next.key !== 'player') combat.activeTargetIndex = next.idx;
+        if (next.key !== 'player') combat.actingMonsterIndex = next.idx;
     }
 
     syncCombatState();
+    return minTick;
 }
 
 /**
@@ -189,6 +191,13 @@ function autoSelectTarget() {
  */
 export function summonMonster(monsterDef, level) {
     if (!combat) return;
+
+    const aliveSummons = combat.monsters.filter(m => m.isSummon && m.hp > 0).length;
+    if (aliveSummons >= 3) return; // Limit to 3 active summons max
+
+    const spd = monsterDef.spd || 8;
+    const maxTick = parseFloat((100 / Math.max(1, spd)).toFixed(2));
+
     const summoned = {
         ...monsterDef,
         nameKey: monsterDef.id ? `monsters.${monsterDef.id}.name` : null,
@@ -196,6 +205,8 @@ export function summonMonster(monsterDef, level) {
         hp: monsterDef.hp + level,
         maxHp: monsterDef.hp + level,
         currentLevel: level,
+        maxTick: maxTick,
+        currentTick: maxTick,
     };
     combat.monsters.push(summoned);
     combatLog(t('logs.combat_summon_bat'));
@@ -208,29 +219,26 @@ export function summonMonster(monsterDef, level) {
 // ─── Initiative ───
 
 /**
- * Determine who attacks first.
- * @returns {'player'|'monster'}
+ * Determine and log who is naturally faster, and apply first strike trait.
  */
 export function determineInitiative() {
-    if (!combat) return 'player';
+    if (!combat) return;
 
     const primaryMonster = combat.monsters[0];
     let playerSpd = combat.player.spd;
 
-    // Trait: 선수필승 → +10% initiative bonus (treated as +3 SPD)
+    // Trait: 선수필승 → 30% initial ATB boost and +3 SPD for tiebreak log
     if (combat.player.traits.some((t) => t.id === 't_pos_first_strike')) {
         playerSpd += 3;
+        combat.player.currentTick = Math.max(0, combat.player.currentTick - (combat.player.maxTick * 0.3));
     }
 
-    // Tie-break: player wins
+    // Just for logging who is technically faster initially
     const first = playerSpd >= primaryMonster.spd ? 'player' : 'monster';
-
-    combat.nextTurn = first;
 
     combatLog(t('logs.combat_first_strike', { name: first === 'player' ? getFighterName(combat.player) : getFighterName(primaryMonster), spd: first === 'player' ? playerSpd : primaryMonster.spd }));
 
     syncCombatState();
-    return first;
 }
 
 // ─── Hit Chance ───
@@ -343,6 +351,7 @@ export function playerAttack(part) {
 
     if (!hit) {
         combatLog(t('logs.combat_miss', { name: getFighterName(combat.player), part: getPartLabel(part), chance: hitChance }));
+        syncCombatState();
         return { hit: false, damage: 0, critical: false, weaponBroke: false, targetIndex };
     }
 
@@ -411,11 +420,6 @@ export function playerAttack(part) {
     }
 
     syncCombatState();
-    // ATB: reset player tick and advance to next actor
-    if (!combat.result) {
-        resetTick('player');
-        advanceTick();
-    }
     return { hit: true, damage, critical, weaponBroke, targetIndex };
 }
 
@@ -429,122 +433,116 @@ export function monsterAttack() {
     if (!combat || combat.result) return { damage: 0, evaded: false };
 
     combat.phase = 'monster';
-    combat.nextTurn = 'player';
 
     let totalDamage = 0;
     let anyEvaded = false;
 
     const sanityMod = getSanityStatus(getDungeonState()?.sanity ?? 100);
 
-    for (const monster of combat.monsters) {
-        if (monster.hp <= 0) continue; // Skip dead monsters
+    const actingIndex = combat.actingMonsterIndex !== undefined ? combat.actingMonsterIndex : combat.activeTargetIndex;
+    const monster = combat.monsters[actingIndex];
+    if (!monster || monster.hp <= 0) return { damage: 0, evaded: false };
 
-        // Apply sanity monster DMG modifier
-        const monsterDmgMult = 1 + (sanityMod.monsterDmg ?? 0) / 100;
-        let damage = Math.max(1, Math.round((monster.atk - combat.player.def) * monsterDmgMult));
+    // Apply sanity monster DMG modifier
+    const monsterDmgMult = 1 + (sanityMod.monsterDmg ?? 0) / 100;
+    let damage = Math.max(1, Math.round((monster.atk - combat.player.def) * monsterDmgMult));
 
-        // ─── Special Abilities (Attack Modifiers) ───
+    // ─── Special Abilities (Attack Modifiers) ───
 
-        // Mimic: First turn crit
-        if (monster.ability === 'first_crit' && combat.turn <= 1) {
-            damage = Math.round(damage * 2);
-            combatLog(t('logs.combat_mimic_crit'));
-        }
+    // Mimic: First turn crit
+    if (monster.ability === 'first_crit' && combat.turn <= 1) {
+        damage = Math.round(damage * 2);
+        combatLog(t('logs.combat_mimic_crit'));
+    }
 
-        // Balrog: AoE (Every 2 turns)
-        if (monster.ability === 'aoe' && combat.turn % 2 === 0) {
-            damage = Math.round(damage * 1.5);
-            combatLog(t('logs.combat_balrog_aoe'));
-        }
+    // Balrog: AoE (Every 2 turns)
+    if (monster.ability === 'aoe' && combat.turn % 2 === 0) {
+        damage = Math.round(damage * 1.5);
+        combatLog(t('logs.combat_balrog_aoe'));
+    }
 
-        // Warlock: Magic Attack (Ignores DEF partially)
-        if (monster.ability === 'magic_atk') {
-            damage = Math.max(1, monster.atk - Math.floor(combat.player.def / 2));
-            combatLog(t('logs.combat_warlock_magic'));
-        }
+    // Warlock: Magic Attack (Ignores DEF partially)
+    if (monster.ability === 'magic_atk') {
+        damage = Math.max(1, monster.atk - Math.floor(combat.player.def / 2));
+        combatLog(t('logs.combat_warlock_magic'));
+    }
 
-        // Summoner: Bat Summon (instead of dealing bonus damage, actually summon)
-        if (monster.ability === 'summon_bat' && Math.random() < 0.3) {
-            const ds = getDungeonState();
-            const batDef = { id: 'm_bat', name: '박쥐', emoji: '🦇', hp: 10, atk: 4, def: 0, eva: 20, spd: 8, exp: 0, parts: { head: true, body: true, legs: false }, partsHit: {}, ability: '', isSummon: true };
-            summonMonster(batDef, ds.wave || 1);
-            // Still attacked this turn
-        }
-
-        // Goblin King: Battle Cry (Buff ATK every 3 turns)
-        if (monster.ability === 'buff_goblins' && combat.turn % 3 === 0) {
-            monster.atk += 2;
-            combatLog(t('logs.combat_goblin_buff'));
-            continue; // Skips actual attack this turn
-        }
-
-        // Treant: Entangle (Reduce Player AGI)
-        if (monster.ability === 'entangle' && Math.random() < 0.25) {
-            combat.player.agi = Math.max(0, combat.player.agi - 1);
-            combatLog(t('logs.combat_treant_snare'));
-        }
-
-        // Player evasion (boosted or penalized by sanity evasion modifier)
-        let evadeChance = combat.player.agi * 2 + (sanityMod.evasion ?? 0);
-        const dsLocal = getDungeonState();
-        const theme = dsLocal.mapData?.theme || '';
-        if (theme) {
-            const expertId = `t_pos_${theme}_expert`;
-            if (combat.player.traits.some((t) => t.id === expertId)) {
-                evadeChance += 5;
-            }
-        }
-
-        const evadeRoll = Math.random() * 100;
-        if (evadeRoll < evadeChance) {
-            combatLog(t('logs.combat_evade', { name: getFighterName(combat.player), chance: evadeChance }));
-            anyEvaded = true;
-            continue;
-        }
-
-        combat.player.hp = Math.max(0, combat.player.hp - damage);
-        totalDamage += damage;
-
-        // Sync back to dungeon state
+    // Summoner: Bat Summon
+    if (monster.ability === 'summon_bat' && Math.random() < 0.3) {
         const ds = getDungeonState();
-        ds.currentHp = combat.player.hp;
+        const batDef = { id: 'm_bat', name: '박쥐', emoji: '🦇', hp: 8, atk: 4, def: 0, eva: 20, spd: 8, exp: 0, parts: { head: true, body: true, legs: false }, partsHit: { head: 40, body: 80 }, ability: '', isSummon: true };
+        summonMonster(batDef, ds.wave || 1);
+        // Still attacked this turn
+    }
 
-        combatLog(t('logs.combat_monster_hit', { name: getFighterName(monster), dmg: damage }));
+    // Goblin King: Battle Cry (Buff ATK every 3 turns)
+    if (monster.ability === 'buff_goblins' && combat.turn % 3 === 0) {
+        monster.atk += 2;
+        combatLog(t('logs.combat_goblin_buff'));
+        return { damage: totalDamage, evaded: anyEvaded }; // Skips actual attack this turn
+    }
 
-        // Demon: Burn status effect
-        if (monster.ability === 'burn') {
-            applyStatusEffect({
-                type: 'burn',
-                duration: SETTINGS.burnDuration,
-                icon: '🔥',
-                label: t('status.burn'),
-            });
+    // Treant: Entangle (Reduce Player AGI)
+    if (monster.ability === 'entangle' && Math.random() < 0.25) {
+        combat.player.agi = Math.max(0, combat.player.agi - 1);
+        combatLog(t('logs.combat_treant_snare'));
+    }
+
+    // Player evasion (boosted or penalized by sanity evasion modifier)
+    let evadeChance = combat.player.agi * 2 + (sanityMod.evasion ?? 0);
+    const dsLocal = getDungeonState();
+    const theme = dsLocal.mapData?.theme || '';
+    if (theme) {
+        const expertId = `t_pos_${theme}_expert`;
+        if (combat.player.traits.some((t) => t.id === expertId)) {
+            evadeChance += 5;
         }
+    }
 
-        // Poison Slime: Poison status effect (30% chance)
-        if (monster.ability === 'poison' && Math.random() < 0.3) {
-            applyStatusEffect({
-                type: 'poison',
-                duration: SETTINGS.poisonDuration,
-                icon: '🟢',
-                label: t('status.poison'),
-            });
-        }
+    const evadeRoll = Math.random() * 100;
+    if (evadeRoll < evadeChance) {
+        combatLog(t('logs.combat_evade', { name: getFighterName(combat.player), chance: evadeChance }));
+        anyEvaded = true;
+        syncCombatState();
+        return { damage: totalDamage, evaded: anyEvaded };
+    }
 
-        if (combat.player.hp <= 0) {
-            combat.result = 'defeat';
-            combat.phase = 'result';
-            combatLog(t('logs.death'));
-            break;
-        }
+    combat.player.hp = Math.max(0, combat.player.hp - damage);
+    totalDamage += damage;
+
+    // Sync back to dungeon state
+    const ds = getDungeonState();
+    ds.currentHp = combat.player.hp;
+
+    combatLog(t('logs.combat_monster_hit', { name: getFighterName(monster), dmg: damage }));
+
+    // Demon: Burn status effect
+    if (monster.ability === 'burn') {
+        applyStatusEffect({
+            type: 'burn',
+            duration: SETTINGS.burnDuration,
+            icon: '🔥',
+            label: t('status.burn'),
+        });
+    }
+
+    // Poison Slime: Poison status effect (30% chance)
+    if (monster.ability === 'poison' && Math.random() < 0.3) {
+        applyStatusEffect({
+            type: 'poison',
+            duration: SETTINGS.poisonDuration,
+            icon: '🟢',
+            label: t('status.poison'),
+        });
+    }
+
+    if (combat.player.hp <= 0) {
+        combat.result = 'defeat';
+        combat.phase = 'result';
+        combatLog(t('logs.death'));
     }
 
     syncCombatState();
-    // ATB: reset each monster's tick and advance to next actor
-    if (!combat.result) {
-        combat.monsters.forEach((m, i) => { if (m.hp > 0) resetTick(i); });
-        advanceTick();
-    }
     return { damage: totalDamage, evaded: anyEvaded && totalDamage === 0 };
 }
 

@@ -5,9 +5,11 @@
 import {
     getCombatState, getHitChance, playerAttack, monsterAttack,
     attemptFlee, determineInitiative, getPredictedDamage, getFighterName,
-    setActiveTarget, getActiveTarget
+    setActiveTarget, getActiveTarget, advanceTick, resetTick
 } from './combatEngine.js';
 import { getDungeonState } from './dungeonState.js';
+import { playSFX } from './soundEngine.js';
+import { screenShake, screenFlash, spawnParticlesAtElement, spawnParticles } from './vfxEngine.js';
 import { t } from './i18n.js';
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -55,32 +57,23 @@ export async function showCombat(monster, callbacks = {}) {
         refreshCombatLog();
 
         // If the combat was interrupted and it's the monster's turn, let them act
-        if (combat.nextTurn === 'monster') {
-            await delay(400);
-            await doMonsterTurn();
-            if (combat.result === 'defeat') {
-                await handleResult(callbacks);
-                return;
-            }
-        }
+        await processTurnQueue(callbacks);
     } else {
-        // Determine initiative
-        await delay(400);
-        const first = determineInitiative();
+        // Determine initiative and apply traits
+        determineInitiative();
+
+        // Initial ATB drop animation!
+        updateAllTicks(false);
+        await delay(200);
+
+        advanceTick(); // Let engine pick the first turn!
+        updateAllTicks(true); // Animate dropping to 0
+        await delay(500);
+
         refreshCombatLog();
 
-        if (first === 'monster') {
-            await delay(600);
-            await doMonsterTurn();
-            if (combat.result === 'defeat') {
-                await handleResult(callbacks);
-                return;
-            }
-        }
+        await processTurnQueue(callbacks);
     }
-
-    // Enable player actions
-    enablePlayerActions(callbacks);
 
     // [Admin] Watcher for forced results
     const adminCheck = setInterval(() => {
@@ -114,10 +107,20 @@ function buildMonsterCard(m, index, isSelected) {
     const isDead = m.hp <= 0;
     const tickPercent = m.maxTick > 0 ? Math.round((m.currentTick / m.maxTick) * 100) : 0;
     const summonBadge = m.isSummon ? `<span class="summon-badge">소환</span>` : '';
+
+    // Visual layout: 4 2 1 3 5 (Center is index 0, radiating outwards)
+    const visualOrderMap = [3, 2, 4, 1, 5, 0, 6, -1, 7];
+    const itemOrder = visualOrderMap[index] !== undefined ? visualOrderMap[index] : index + 10;
+
+    // V-formation depth: Center is front (0), sides step backward
+    const depth = Math.floor((index + 1) / 2);
+    const translateY = depth * -12;
+    const zIndex = 100 - depth;
+
     return `
         <div class="monster-card ${isDead ? 'monster-dead' : ''} ${isSelected && !isDead ? 'monster-selected' : ''}"
              data-monster-index="${index}"
-             style="--depth-offset: ${index};">
+             style="order: ${itemOrder}; --offset-y: ${translateY}px; transform: translateY(var(--offset-y)); z-index: ${zIndex};">
             ${summonBadge}
             <div class="monster-card-emoji">${m.emoji}</div>
             <div class="monster-card-name">${getFighterName(m)}${m.isSummon ? '' : ` Lv.${m.currentLevel}`}</div>
@@ -127,7 +130,7 @@ function buildMonsterCard(m, index, isSelected) {
             <div class="monster-card-hp-text" id="monsterHpText-${index}">${m.hp}/${m.maxHp}</div>
             <div class="atb-tick-bar">
                 <div class="atb-tick-fill" id="monsterTickFill-${index}" style="width:${tickPercent}%"></div>
-                <span class="atb-tick-text" id="monsterTickText-${index}">${m.currentTick !== undefined ? m.currentTick.toFixed(1) : '-'}</span>
+                <span class="atb-tick-text" id="monsterTickText-${index}">${m.currentTick != null ? m.currentTick.toFixed(1) : '-'}</span>
             </div>
             <div class="combat-damage-area" id="monsterDamageArea-${index}"></div>
             ${isDead ? '<div class="monster-dead-overlay">💀</div>' : ''}
@@ -143,19 +146,21 @@ function buildPartButtonsHTML(combat) {
     const partIcons = { head: '🎯', body: '🫁', legs: '🦵' };
     const partNames = { head: t('dungeon_ui.part_head'), body: t('dungeon_ui.part_body'), legs: t('dungeon_ui.part_legs') };
 
+    const isPlayerTurn = combat.nextTurn === 'player' && combat.player.currentTick === 0;
+
     return parts.map((part) => {
-        const enabled = target.parts?.[part] !== false;
-        const hitChance = enabled ? getHitChance(part) : 0;
-        const dmg = enabled ? getPredictedDamage(part) : { min: 0, max: 0 };
+        const canHitPart = target.parts?.[part] !== false;
+        const hitChance = canHitPart ? getHitChance(part) : 0;
+        const dmg = canHitPart ? getPredictedDamage(part) : { min: 0, max: 0 };
         return `
-            <button class="part-btn ${enabled ? '' : 'part-disabled'}"
+            <button class="part-btn ${canHitPart ? '' : 'part-disabled'}"
                     data-part="${part}"
-                    ${enabled ? '' : 'disabled'}>
+                    ${(canHitPart && isPlayerTurn) ? '' : 'disabled'}>
                 <span class="part-icon">${partIcons[part]}</span>
                 <div class="part-info">
                     <span class="part-name">${partNames[part]}</span>
-                    <span class="part-hit">${enabled ? hitChance + '%' : t('dungeon_ui.part_disabled')}</span>
-                    <span class="part-dmg">${enabled ? `Dmg ${dmg.min}~${dmg.max}` : '-'}</span>
+                    <span class="part-hit">${canHitPart ? hitChance + '%' : t('dungeon_ui.part_disabled')}</span>
+                    <span class="part-dmg">${canHitPart ? `Dmg ${dmg.min}~${dmg.max}` : '-'}</span>
                 </div>
             </button>
         `;
@@ -184,7 +189,13 @@ function buildCombatHTML(combat) {
             <div class="combat-player-section">
                 <div class="combat-player-header">
                     <span class="combat-player-portrait">${p.portrait}</span>
-                    <span class="combat-player-name">${getFighterName(p)}</span>
+                    <div class="combat-player-info-stack">
+                        <span class="combat-player-name">${getFighterName(p)}</span>
+                        <div class="atb-tick-bar player-tick-bar">
+                            <div class="atb-tick-fill player-tick" id="playerTickFill" style="width:${p.maxTick > 0 ? Math.round((p.currentTick / p.maxTick) * 100) : 0}%"></div>
+                            <span class="atb-tick-text" id="playerTickText">${p.currentTick != null ? p.currentTick.toFixed(1) : '-'}</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="combat-hp-section">
                     <label class="combat-hp-label">${t('dungeon_ui.player_hp')}</label>
@@ -193,10 +204,6 @@ function buildCombatHTML(combat) {
                         <span class="combat-hp-text" id="playerHpText">${p.hp}/${p.maxHp}</span>
                     </div>
                 </div>
-                <div class="atb-tick-bar player-tick-bar">
-                    <div class="atb-tick-fill player-tick" id="playerTickFill" style="width:${p.maxTick > 0 ? Math.round((p.currentTick / p.maxTick) * 100) : 0}%"></div>
-                    <span class="atb-tick-text" id="playerTickText">${p.currentTick !== undefined ? p.currentTick.toFixed(1) : '-'}</span>
-                </div>
                 <div class="combat-damage-area" id="playerDamageArea"></div>
             </div>
 
@@ -204,11 +211,11 @@ function buildCombatHTML(combat) {
             <div class="combat-log-section">
                 <div class="combat-log" id="combatLog"></div>
                 <div class="combat-actions-row">
-                  <button class="btn-flee" id="btnFlee">🏃 ${t('dungeon_ui.flee_btn')}</button>
+                  <button class="btn-flee" id="btnFlee" disabled>🏃 ${t('dungeon_ui.flee_btn')}</button>
                   <div class="combat-admin-controls">
-                    <button class="btn-admin-small" id="btnAdminWin">⚔️Win</button>
-                    <button class="btn-admin-small" id="btnAdminLose">🏳️Lose</button>
-                    <button class="btn-admin-small" id="btnAdminKill">💀Kill</button>
+                    <button class="btn-admin-small" id="btnAdminWin" disabled>⚔️Win</button>
+                    <button class="btn-admin-small" id="btnAdminLose" disabled>🏳️Lose</button>
+                    <button class="btn-admin-small" id="btnAdminKill" disabled>💀Kill</button>
                   </div>
                 </div>
             </div>
@@ -292,39 +299,98 @@ function refreshPartButtons() {
     if (!combat) return;
     partsContainer.innerHTML = buildPartButtonsHTML(combat);
     // Re-attach part click events
-    if (!combat.result) {
+    if (!combat.result && combat.nextTurn === 'player' && combat.player.currentTick === 0) {
         attachPartEvents(combat.__pendingCallbacks);
     }
 }
 
-// ─── Combat Flow ───
-
-async function doMonsterTurn() {
+function updateAllTicks(animate = true, resetingActor = null) {
     const combat = getCombatState();
     if (!combat) return;
 
-    // Light up arena
-    const arena = document.getElementById('combatMonstersArena');
-    if (arena) arena.classList.add('monsters-acting');
+    // Update player
+    const pFill = document.getElementById('playerTickFill');
+    const pText = document.getElementById('playerTickText');
+    if (pFill) {
+        // Only use transition if animating, OR if this specific actor is resetting
+        pFill.style.transition = (animate && resetingActor !== 'player') ? 'width 0.4s linear' : 'none';
+        pFill.style.width = `${combat.player.maxTick > 0 ? Math.round((combat.player.currentTick / combat.player.maxTick) * 100) : 0}%`;
+    }
+    if (pText) pText.textContent = combat.player.currentTick != null ? combat.player.currentTick.toFixed(1) : '-';
+
+    // Update monsters
+    combat.monsters.forEach((m, i) => {
+        const mFill = document.getElementById(`monsterTickFill-${i}`);
+        const mText = document.getElementById(`monsterTickText-${i}`);
+        if (mFill) {
+            mFill.style.transition = (animate && resetingActor !== i) ? 'width 0.4s linear' : 'none';
+            mFill.style.width = `${m.maxTick > 0 ? Math.round((m.currentTick / m.maxTick) * 100) : 0}%`;
+        }
+        if (mText) mText.textContent = m.currentTick != null ? m.currentTick.toFixed(1) : '-';
+    });
+}
+
+// ─── Combat Flow ───
+
+async function processTurnQueue(callbacks) {
+    const combat = getCombatState();
+    while (combat && !combat.result && combat.nextTurn === 'monster') {
+        const mIdx = combat.actingMonsterIndex !== undefined ? combat.actingMonsterIndex : combat.activeTargetIndex;
+        await doMonsterTurn(mIdx);
+    }
+    if (combat && !combat.result) {
+        enablePlayerActions(callbacks);
+    } else if (combat && combat.result) {
+        await handleResult(callbacks);
+    }
+}
+
+async function doMonsterTurn(monsterIndex) {
+    const combat = getCombatState();
+    if (!combat) return;
+
+    // Light up acting monster
+    const actingCard = document.querySelector(`.monster-card[data-monster-index="${monsterIndex}"]`);
+    if (actingCard) actingCard.classList.add('monster-acting');
     await delay(500);
 
+    combat.actingMonsterIndex = monsterIndex;
     const { damage, evaded } = monsterAttack();
-    if (arena) arena.classList.remove('monsters-acting');
+    combat.actingMonsterIndex = undefined;
+
+    if (actingCard) actingCard.classList.remove('monster-acting');
 
     refreshCombatLog();
 
     if (damage > 0) {
         showDamageFloat('playerDamageArea', damage, 'player');
-        document.body.classList.add('shake');
-        setTimeout(() => document.body.classList.remove('shake'), 400);
+        playSFX('playerHit');
+        screenShake(5, 400);
+        screenFlash('rgba(255, 0, 0, 0.25)', 200);
     } else if (evaded) {
         showDamageFloat('playerDamageArea', '회피!', 'player');
+        playSFX('miss');
     } else {
         showDamageFloat('playerDamageArea', 'Miss', 'player');
+        playSFX('miss');
     }
 
     updatePlayerHP();
     await delay(600);
+
+    // ATB: reset each monster's tick and advance to next actor
+    if (!combat.result) {
+        const resetTarget = monsterIndex !== undefined ? monsterIndex : combat.activeTargetIndex;
+        // Reset only the monster that just acted
+        resetTick(resetTarget);
+        updateAllTicks(false, resetTarget);
+        await delay(50);
+
+        // Advance and animate
+        advanceTick();
+        updateAllTicks(true, resetTarget);
+        await delay(500);
+    }
 }
 
 function enablePlayerActions(callbacks) {
@@ -350,12 +416,7 @@ function enablePlayerActions(callbacks) {
                 await handleResult(callbacks);
             } else {
                 await delay(600);
-                await doMonsterTurn();
-                if (combat.result === 'defeat') {
-                    await handleResult(callbacks);
-                } else {
-                    enablePlayerActions(callbacks);
-                }
+                await processTurnQueue(callbacks);
             }
         };
     }
@@ -386,10 +447,24 @@ function attachPartEvents(callbacks) {
 
             if (hit) {
                 showDamageFloat(`monsterDamageArea-${targetIndex}`, damage, critical ? 'critical' : 'monster');
+                const targetCard = document.querySelector(`.monster-card[data-monster-index="${targetIndex}"]`);
+
+                if (critical) {
+                    playSFX('crit');
+                    screenShake(6, 400);
+                    screenFlash('rgba(255, 215, 0, 0.2)', 200);
+                    spawnParticlesAtElement(targetCard, { count: 12, emoji: '✨', spread: 60 });
+                } else {
+                    playSFX('hit');
+                    screenShake(3, 200);
+                    spawnParticlesAtElement(targetCard, { count: 8, emoji: '💢', spread: 40 });
+                }
+
                 refreshAllMonsterHP();
                 highlightSelectedMonster(combat.activeTargetIndex);
             } else {
                 showDamageFloat(`monsterDamageArea-${targetIndex}`, 'Miss', 'monster');
+                playSFX('miss');
             }
 
             if (combat.result === 'victory') {
@@ -401,13 +476,20 @@ function attachPartEvents(callbacks) {
                 if (activeLabel) activeLabel.textContent = getFighterName(getActiveTarget());
                 refreshPartButtons();
 
-                await delay(600);
-                await doMonsterTurn();
-                if (combat.result === 'defeat') {
-                    await handleResult(callbacks);
-                } else {
-                    enablePlayerActions(callbacks);
-                }
+                // Wait slightly for attack damage visual
+                await delay(400);
+
+                // ATB: reset player tick instantly
+                resetTick('player');
+                updateAllTicks(false, 'player');
+                await delay(50);
+
+                // Advance and animate ticks
+                advanceTick();
+                updateAllTicks(true, 'player');
+                await delay(500);
+
+                await processTurnQueue(callbacks);
             }
         };
     });
@@ -438,9 +520,15 @@ async function handleResult(callbacks) {
     delete window.__refreshCombatUI;
     delete window.__refreshCombatMonsters;
 
+    delete window.__refreshCombatMonsters;
+
     if (combat.result === 'victory') {
+        playSFX('victory');
+        spawnParticles(window.innerWidth / 2, window.innerHeight / 2, { count: 20, emoji: '⭐', spread: 150 });
         if (callbacks.onVictory) callbacks.onVictory(combat.monsters);
     } else if (combat.result === 'defeat') {
+        playSFX('defeat');
+        screenFlash('rgba(139, 0, 0, 0.4)', 1000);
         if (callbacks.onDefeat) callbacks.onDefeat();
     } else if (combat.result === 'fled') {
         if (callbacks.onFlee) callbacks.onFlee();

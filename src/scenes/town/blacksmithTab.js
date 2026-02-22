@@ -93,7 +93,7 @@ export function renderBlacksmith(el) {
     return `
             <div class="recipe-row ${canCraft ? 'craftable' : ''}">
               <div class="row-info">
-                <span class="item-emoji">${resultItem.emoji}</span>
+                <span class="item-emoji grade-${resultItem.grade}">${resultItem.emoji}</span>
                 <div class="info-text">
                   <span class="item-name">${getLocName(resultItem)}</span>
                   <span class="item-grade grade-${resultItem.grade}">${t('grades.' + resultItem.grade) || resultItem.grade}</span>

@@ -1,12 +1,13 @@
 import { t, setLanguage } from '../../i18n.js';
 import { getState, adminResetAccount } from '../../gameState.js';
 import { showConfirmModal } from './townUtils.js';
+import { setVolume, toggleMute, getIsMuted, getGlobalVolume, playSFX } from '../../soundEngine.js';
 
 export function renderSettings(el) {
-    const state = getState();
-    const currentLang = state.language || 'ko';
+  const state = getState();
+  const currentLang = state.language || 'ko';
 
-    el.innerHTML = `
+  el.innerHTML = `
     <div class="tab-panel settings-panel fade-in">
       <h2>⚙️ ${t('ui.settings.title')}</h2>
       
@@ -19,6 +20,21 @@ export function renderSettings(el) {
               <option value="en" ${currentLang === 'en' ? 'selected' : ''}>🇺🇸 English</option>
               <option value="ja" ${currentLang === 'ja' ? 'selected' : ''}>🇯🇵 日本語</option>
             </select>
+          </div>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-row">
+          <span class="settings-label">음향 설정 (Sound)</span>
+          <div class="settings-value" style="display: flex; gap: 10px; align-items: center;">
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="${getGlobalVolume()}" style="width: 100px;">
+            <button id="btnMuteToggle" class="btn-town-secondary" style="padding: 4px 8px; font-size: 12px;">
+              ${getIsMuted() ? '🔇 음소거 해제' : '🔊 음소거'}
+            </button>
+            <button id="btnTestSound" class="btn-town-secondary" style="padding: 4px 8px; font-size: 12px;">
+              테스트
+            </button>
           </div>
         </div>
       </div>
@@ -35,23 +51,36 @@ export function renderSettings(el) {
     </div>
   `;
 
-    // Language Change
-    el.querySelector('#langSelect').addEventListener('change', (e) => {
-        const newLang = e.target.value;
-        if (newLang !== currentLang) {
-            setLanguage(newLang);
-            location.reload();
-        }
-    });
+  // Language Change
+  el.querySelector('#langSelect').addEventListener('change', (e) => {
+    const newLang = e.target.value;
+    if (newLang !== currentLang) {
+      setLanguage(newLang);
+      location.reload();
+    }
+  });
 
-    // Reset
-    el.querySelector('#btnSettingsReset').addEventListener('click', () => {
-        showConfirmModal(
-            t('ui.settings.reset_confirm_title'),
-            t('ui.settings.reset_confirm_msg'),
-            () => {
-                adminResetAccount();
-            }
-        );
-    });
+  // Sound Settings
+  const volSlider = el.querySelector('#volumeSlider');
+  const muteBtn = el.querySelector('#btnMuteToggle');
+
+  volSlider.addEventListener('input', (e) => setVolume(parseFloat(e.target.value)));
+
+  muteBtn.addEventListener('click', () => {
+    const muted = toggleMute();
+    muteBtn.textContent = muted ? '🔇 음소거 해제' : '🔊 음소거';
+  });
+
+  el.querySelector('#btnTestSound').addEventListener('click', () => playSFX('itemPickup'));
+
+  // Reset
+  el.querySelector('#btnSettingsReset').addEventListener('click', () => {
+    showConfirmModal(
+      t('ui.settings.reset_confirm_title'),
+      t('ui.settings.reset_confirm_msg'),
+      () => {
+        adminResetAccount();
+      }
+    );
+  });
 }

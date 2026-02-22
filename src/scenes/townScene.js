@@ -1,5 +1,5 @@
-// ─── Town Scene (마을씬) ───
 import { changeScene } from '../sceneManager.js';
+import { playSFX } from '../soundEngine.js';
 import { t } from '../i18n.js';
 
 import { renderCurrencyBar, updateTimers } from './town/townUtils.js';
@@ -49,6 +49,7 @@ export function mount(container) {
   // Tab switching
   container.querySelectorAll('.town-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
+      playSFX('click');
       container.querySelectorAll('.town-tab').forEach((t) => t.classList.remove('active'));
       tab.classList.add('active');
       renderTab(tab.dataset.tab);

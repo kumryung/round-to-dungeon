@@ -30,7 +30,6 @@ function buildContent() {
     { key: 'agi', label: 'AGI', icon: '💨', value: w.agi, bonus: '+1' },
     { key: 'spd', label: 'SPD', icon: '⚡', value: w.spd, bonus: '+1' },
     { key: 'dex', label: 'DEX', icon: '🎯', value: w.dex, bonus: '+1' },
-    { key: 'luk', label: 'LUK', icon: '🍀', value: w.luk, bonus: '+1' },
   ];
 
   return `
