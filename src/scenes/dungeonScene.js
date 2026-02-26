@@ -21,6 +21,7 @@ import { sendToMailbox, addItemToStorage, getState, clearActiveDungeon, updateDu
 import { playSFX } from '../soundEngine.js';
 import { screenShake } from '../vfxEngine.js';
 import { t } from '../i18n.js';
+import { refreshCurrencyDisplay } from './town/townUtils.js';
 
 
 let boardRendered = false;
@@ -218,6 +219,16 @@ export function mount(container, params = {}) {
             openLevelUpOverlay(() => renderHUD(container, getDungeonState()));
           });
         }
+      } else if (resume && ds.phase === 'spawn') {
+        // Resume spawn phase (dice already rolled, just replay animation)
+        await showWaveTitle(ds.wave);
+        startSpawnPhase(); // will restore from ds.spawnData if present
+        const btnStats = container.querySelector('#btnOpenStats');
+        if (btnStats) {
+          btnStats.addEventListener('click', () => {
+            openLevelUpOverlay(() => { renderHUD(container, getDungeonState()); });
+          });
+        }
       } else {
         await showWaveTitle(ds.wave);
         startSpawnPhase();
@@ -253,9 +264,25 @@ async function startSpawnPhase() {
   const actionEl = document.getElementById('actionContent');
   if (!actionEl) return;
 
-  // Step 1: Roll dice
-  const rolls = rollSpawnDice();
-  addLog(t('logs.spawn_dice', { monster: rolls.monsterRoll, treasure: rolls.treasureRoll, event: rolls.eventRoll }));
+  // Check if we already rolled and saved spawn data (e.g. from a refresh before animation finished)
+  let rolls, placements;
+
+  if (ds.spawnData) {
+    rolls = ds.spawnData.rolls;
+    placements = ds.spawnData.placements;
+    addLog("[System] 스폰 과정을 복원합니다.");
+  } else {
+    // Step 1: Roll dice
+    rolls = rollSpawnDice();
+    addLog(t('logs.spawn_dice', { monster: rolls.monsterRoll, treasure: rolls.treasureRoll, event: rolls.eventRoll }));
+
+    // Step 2: Generate placements
+    placements = getSpawnPlacements(rolls);
+
+    // Save to state so a refresh doesn't reroll
+    ds.spawnData = { rolls, placements };
+    triggerUpdate();
+  }
 
   // Show dice results in action panel
   playSFX('dice');
@@ -270,9 +297,6 @@ async function startSpawnPhase() {
       <div class="spawn-progress" id="spawnProgress"></div>
   </div>
   `;
-
-  // Step 2: Generate placements
-  const placements = getSpawnPlacements(rolls);
 
   // Step 3: Animate each spawn one by one
   await delay(600); // Pause after showing dice
@@ -313,6 +337,7 @@ async function startSpawnPhase() {
 
   // Step 4: Transition to move phase
   ds.phase = 'move';
+  delete ds.spawnData; // Clear spawn data once phase is complete
   triggerUpdate(); // Persist state so refresh doesn't repeat spawn phase
   await delay(400);
   showMoveUI();
@@ -342,13 +367,23 @@ async function handleRollMove() {
 
   // Roll and calculate path
   const result = executeMovePhase();
+  const rawRoll = result.rawRoll ?? result.roll;
+  const penalty = result.penaltyApplied || 0;
 
   // Update topbar
   refreshTopbar(ds);
   refreshHUD(ds);
 
-  // Show dice result
-  showDicePopup(result.roll);
+  // Show dice popup: if there's a weight penalty, show raw first then animate reduction
+  if (penalty < 0) {
+    showDicePopup(rawRoll, 0, false);
+    await delay(700);
+    showDicePopup(result.roll, penalty, true); // show final with penalty badge
+    addLog(`${result.weightIcon || '🎒'} [무게 페널티] 주사위 ${rawRoll} ${penalty} = ${result.roll}`);
+    await delay(600);
+  } else {
+    showDicePopup(result.roll, 0, false);
+  }
 
   // Animate movement along path
   await animateMovement(result.path, ds.sideLength);
@@ -679,6 +714,15 @@ function showDungeonClear() {
       if (globalW) {
         globalW.curHp = ds.currentHp;
         globalW.curSanity = ds.sanity;
+        globalW.level = ds.level;
+        globalW.exp = ds.exp;
+        globalW.statPoints = ds.freeStatPoints;
+        globalW.vit = w.vit;
+        globalW.str = w.str;
+        globalW.agi = w.agi;
+        globalW.spd = w.spd;
+        globalW.dex = w.dex;
+        globalW.luk = w.luk;
       }
     }
 
@@ -741,7 +785,18 @@ function showGameOver() {
       const w = ds.wanderer; // Current wanderer in dungeon
       if (w) {
         const globalW = gs.recruitedWanderers.find(rw => rw.id === w.id);
-        if (globalW) globalW.status = 'dead';
+        if (globalW) {
+          globalW.status = 'dead';
+          globalW.level = ds.level;
+          globalW.exp = ds.exp;
+          globalW.statPoints = ds.freeStatPoints;
+          globalW.vit = w.vit;
+          globalW.str = w.str;
+          globalW.agi = w.agi;
+          globalW.spd = w.spd;
+          globalW.dex = w.dex;
+          globalW.luk = w.luk;
+        }
         // send Safe Bag to mailbox
         const safeItems = (ds.inventory?.safeBag || []).filter(item => item !== null);
         if (safeItems.length > 0) {
@@ -767,14 +822,21 @@ function addLog(msg) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-function showDicePopup(value) {
+function showDicePopup(value, penalty = 0, isPenalized = false) {
   const board = document.getElementById('boardContainer');
   if (!board) return;
   const popup = document.createElement('div');
-  popup.className = 'dice-popup';
-  popup.textContent = value;
+  popup.className = 'dice-popup' + (isPenalized ? ' dice-popup-penalized' : '');
+  if (isPenalized && penalty < 0) {
+    popup.innerHTML = `${value} <span class="dice-penalty-badge">${penalty}</span>`;
+  } else {
+    popup.textContent = value;
+  }
+  // Remove any existing popup first
+  board.querySelectorAll('.dice-popup').forEach(p => p.remove());
   board.appendChild(popup);
-  setTimeout(() => popup.remove(), 1200);
+  const duration = isPenalized ? 1400 : 1000;
+  setTimeout(() => popup.remove(), duration);
 }
 
 function refreshTopbar(ds) {
@@ -785,6 +847,7 @@ function refreshTopbar(ds) {
     waveEl.textContent = isFinal ? t('ui.dungeon.final_wave', 'Final Wave') : `${t('dungeon_ui.wave', 'Wave')} ${ds.wave}`;
   }
   if (turnEl) turnEl.textContent = `Turn ${ds.turn}`;
+  refreshCurrencyDisplay();
 }
 
 async function showWaveTitle(wave) {

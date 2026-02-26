@@ -68,32 +68,31 @@ export function showConfirmModal(title, message, onConfirm) {
     const btnOk = document.getElementById('btnConfirmOk');
     const btnCancel = document.getElementById('btnConfirmCancel');
 
+    if (!modal || !btnOk || !btnCancel) return;
+
     titleEl.textContent = title;
     msgEl.textContent = message;
 
     modal.classList.remove('hidden');
 
+    // Remove existing event listeners by cloning the buttons
+    const newBtnOk = btnOk.cloneNode(true);
+    const newBtnCancel = btnCancel.cloneNode(true);
+    btnOk.parentNode.replaceChild(newBtnOk, btnOk);
+    btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
+
     const close = () => {
         modal.classList.add('hidden');
-        cleanup();
     };
 
-    const handleOk = () => {
+    newBtnOk.addEventListener('click', () => {
         onConfirm();
         close();
-    };
+    });
 
-    const handleCancel = () => {
+    newBtnCancel.addEventListener('click', () => {
         close();
-    };
-
-    const cleanup = () => {
-        btnOk.removeEventListener('click', handleOk);
-        btnCancel.removeEventListener('click', handleCancel);
-    };
-
-    btnOk.addEventListener('click', handleOk);
-    btnCancel.addEventListener('click', handleCancel);
+    });
 }
 
 export function renderCurrencyBar(el) {
@@ -102,11 +101,24 @@ export function renderCurrencyBar(el) {
     el.innerHTML = `
     <div class="currency-item diamond" title="${t('ui.town.tooltip_diamond', '다이아몬드')}">
       <span class="currency-icon">💎</span>
-      <span class="currency-value">${state.diamonds.toLocaleString()}</span>
+      <span class="currency-value" id="dispDiamonds">${state.diamonds.toLocaleString()}</span>
     </div>
     <div class="currency-item gold" title="${t('ui.town.tooltip_gold', '골드')}">
       <span class="currency-icon">💰</span>
-      <span class="currency-value">${state.gold.toLocaleString()}</span>
+      <span class="currency-value" id="dispGold">${state.gold.toLocaleString()}</span>
     </div>
   `;
 }
+
+/**
+ * Lightweight in-place update of currently displayed currency values.
+ * Call this after any action that changes gold or diamonds.
+ */
+export function refreshCurrencyDisplay() {
+    const state = getState();
+    const goldEls = document.querySelectorAll('#dispGold, .currency-item.gold .currency-value');
+    const diamEls = document.querySelectorAll('#dispDiamonds, .currency-item.diamond .currency-value');
+    goldEls.forEach(el => { el.textContent = state.gold.toLocaleString(); });
+    diamEls.forEach(el => { el.textContent = state.diamonds.toLocaleString(); });
+}
+

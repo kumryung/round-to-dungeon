@@ -109,11 +109,9 @@ export function renderBoard(tiles, sideLength, container, theme) {
         }
     }
 
-    // Player token (absolute positioned within board)
     const playerToken = document.createElement('div');
     playerToken.className = 'player-token';
     playerToken.id = 'playerToken';
-    playerToken.textContent = '🧙';
     container.appendChild(playerToken);
 }
 
@@ -217,7 +215,7 @@ export function movePlayerToken(index, sideLength, animate = true) {
  */
 export function setPlayerPortrait(portrait) {
     const token = document.getElementById('playerToken');
-    if (token) token.textContent = portrait;
+    if (token) token.innerHTML = portrait;
 }
 
 /**

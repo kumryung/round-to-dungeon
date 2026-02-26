@@ -1,32 +1,26 @@
 import { t } from '../../i18n.js';
-import { getState, allocateStatPoint, dismissWanderer, buryWanderer, expandRoster, equipItem, unequipItem } from '../../gameState.js';
+import { getState, allocateStatPoint, dismissWanderer, buryWanderer, equipItem, unequipItem, getMaxWandererSlots } from '../../gameState.js';
 import { SETTINGS } from '../../data/settings.js';
 import { getLocName, getLocDesc } from '../../utils/i18nUtils.js';
-import { showToast, showConfirmModal } from './townUtils.js';
+import { showToast, showConfirmModal, refreshCurrencyDisplay } from './townUtils.js';
 import { playSFX } from '../../soundEngine.js';
+import { buildItemStatBadges, GRADE_COLOR } from '../../utils/itemCardUtils.js';
+import { renderBuildingHeader, attachBuildingHeaderEvents } from './buildingHeader.js';
 
 export function renderWanderers(el) {
   const state = getState();
+  const maxWanderers = getMaxWandererSlots();
 
   el.innerHTML = `
     <div class="tab-panel wanderers-panel fade-in">
-      <div class="wanderers-header" style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 20px;">
+      ${renderBuildingHeader('lodge')}
+      
+      <div class="wanderers-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
         <div class="wanderers-title-group">
-          <h2>👥 ${t('ui.wanderers.title', '방랑자')}</h2>
-          <p style="color:var(--text-dim); margin-top:5px;">${t('ui.wanderers.subtitle', { count: state.recruitedWanderers.length })}</p>
+          <p style="color:var(--text-dim); margin-top:5px;">${t('ui.wanderers.desc', '고용한 방랑자들을 관리합니다.')}</p>
         </div>
-        <div class="header-right-group" style="display:flex; flex-direction:column; align-items:flex-end; gap: 8px;">
-          <div class="roster-info-container" style="display:flex; align-items:center; gap: 10px; background:var(--bg-surface); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
-            <div style="display:flex; flex-direction:column; align-items:flex-end;">
-              <small style="color:var(--text-dim); font-size:0.8em;">${t('ui.town.roster', '인원')}: ${state.recruitedWanderers.length} / ${state.maxWandererLimit}</small>
-            </div>
-            ${state.maxWandererLimit < SETTINGS.maxWandererCap
-      ? `<button id="btnExpandRoster" class="btn-town-secondary" title="${t('ui.town.tooltip_expand', '인원 한도를 1 늘립니다.')}">
-                  💎 ${SETTINGS.rosterExpandCost} ${t('ui.town.expand_roster', '확장')}
-                </button>`
-      : `<span style="color:var(--gold); font-size: 0.9em;">(${t('ui.town.roster_max', '최대')})</span>`
-    }
-          </div>
+        <div class="header-right-group" style="display:flex; align-items:center; gap: 10px; background:var(--bg-surface); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+          <small style="color:var(--text-dim); font-size:0.8em;">${t('ui.town.roster', '인원')}: ${state.recruitedWanderers.length} / ${maxWanderers}</small>
         </div>
       </div>
       
@@ -40,7 +34,7 @@ export function renderWanderers(el) {
               <div class="wanderer-row ${ch.status === 'dead' ? 'dead-character' : ''}" data-id="${ch.id}" style="${ch.status === 'dead' ? 'opacity: 0.6; filter: grayscale(1);' : ''}">
                 <!-- Identity Section -->
                 <div class="w-col-identity">
-                  <div class="w-portrait ${tierClass}">${ch.status === 'dead' ? '☠️' : ch.portrait}</div>
+                  <div class="w-portrait ${tierClass} ${ch.status === 'dead' ? 'dead' : ''}">${ch.portrait}</div>
                   <div class="w-info">
                     <div class="w-name-row">
                       <span class="w-name" style="${ch.status === 'dead' ? 'text-decoration: line-through; color: var(--red);' : ''}">${ch.nameKey ? t(ch.nameKey) : ch.name}</span>
@@ -61,8 +55,8 @@ export function renderWanderers(el) {
                     <div class="w-bar-track"><div class="w-bar-fill san" style="width: ${(ch.curSanity / ch.maxSanity) * 100}%"></div></div>
                   </div>
                   <div class="w-bar-group">
-                    <div class="w-bar-label">EXP ${Math.floor((ch.exp / (ch.level * 100)) * 100)}%</div>
-                    <div class="w-bar-track"><div class="w-bar-fill exp" style="width: ${(ch.exp / (ch.level * 100)) * 100}%"></div></div>
+                    <div class="w-bar-label">EXP ${Math.min(100, Math.floor((ch.exp / (ch.level * 100)) * 100))}%</div>
+                    <div class="w-bar-track"><div class="w-bar-fill exp" style="width: ${Math.min(100, (ch.exp / (ch.level * 100)) * 100)}%"></div></div>
                   </div>
                 </div>
 
@@ -72,14 +66,14 @@ export function renderWanderers(el) {
                     <div class="w-stat-item" title="${s.toUpperCase()}">
                       <span class="w-stat-label">${s.toUpperCase().slice(0, 3)}</span>
                       <span class="w-stat-val">${ch[s]}</span>
-                      ${ch.statPoints > 0 && ch.status !== 'dead' && s !== 'luk' ? `<button class="btn-stat-inc-mini" data-id="${ch.id}" data-stat="${s}">+</button>` : ''}
+                      ${ch.statPoints > 0 && ch.status !== 'dead' && ch.status !== 'resting' && s !== 'luk' ? `<button class="btn-stat-inc-mini" data-id="${ch.id}" data-stat="${s}">+</button>` : ''}
                     </div>
                   `).join('')}
                   ${ch.statPoints > 0 ? `<div class="stat-points-avail">+${ch.statPoints}</div>` : ''}
                 </div>
 
                 <!-- Equipment (Mini Icons) -->
-                <div class="w-col-equip">
+                <div class="w-col-equip" ${ch.status === 'resting' ? 'style="opacity:0.5; pointer-events:none;"' : ''}>
                   <div class="w-equip-slot ${ch.equipments.weapon ? `equipped grade-${ch.equipments.weapon.grade}` : ''}" data-id="${ch.id}" data-slot="weapon" title="${t('ui.equip.weapon')}">
                     ${ch.equipments.weapon ? ch.equipments.weapon.emoji : '✊'}
                   </div>
@@ -95,7 +89,7 @@ export function renderWanderers(el) {
                 <div class="w-col-action" style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
                   ${ch.status === 'dead'
             ? `<button class="btn-bury-mini" data-id="${ch.id}" title="${t('ui.town.bury', '묻어주기')}">⚰️ ${t('ui.town.bury', '묻어주기')}</button>`
-            : `<button class="btn-town-secondary btn-dismiss-mini" data-id="${ch.id}" title="${t('ui.town.dissmiss', '해고')}">❌</button>`
+            : `<button class="btn-town-secondary btn-dismiss-mini" data-id="${ch.id}" title="${t('ui.town.dissmiss', '해고')}" ${ch.status === 'resting' ? 'disabled' : ''}>❌</button>`
           }
                 </div>
               </div>
@@ -154,23 +148,7 @@ export function renderWanderers(el) {
     });
   });
 
-  const btnExpand = el.querySelector('#btnExpandRoster');
-  if (btnExpand) {
-    btnExpand.addEventListener('click', () => {
-      showConfirmModal(
-        t('ui.town.expand_roster', '숙소 확장'),
-        t('ui.town.expand_confirm_msg', { cost: SETTINGS.rosterExpandCost }),
-        () => {
-          if (expandRoster()) {
-            showToast(t('ui_messages.roster_expanded', '숙소가 확장되었습니다.'));
-            renderWanderers(el);
-          } else {
-            showToast(t('ui.town.not_enough_diamond'));
-          }
-        }
-      );
-    });
-  }
+  attachBuildingHeaderEvents(el);
 }
 
 /**
@@ -200,29 +178,9 @@ export function renderEquipSelector(wandererId, slot, parentEl) {
   };
 
   const renderItemStats = (item) => {
-    const chips = [];
-
-    if (item.type === 'weapon') {
-      chips.push(`<span class="equip-stat-chip stat-dmg">⚔️ DMG ${item.dmgMin}~${item.dmgMax}</span>`);
-      const dur = item.durability === Infinity ? '∞' : item.maxDurability;
-      chips.push(`<span class="equip-stat-chip stat-dur">🛡️ ${t('ui.equip.durability')} ${dur}</span>`);
-    }
-
-    if (item.type === 'armor') {
-      if (item.def) chips.push(`<span class="equip-stat-chip stat-def">🛡️ DEF +${item.def}</span>`);
-      if (item.maxHp) chips.push(`<span class="equip-stat-chip stat-hp">❤️ HP +${item.maxHp}</span>`);
-    }
-
-    if (item.type === 'accessory') {
-      const ACC_STAT_KEYS = ['str', 'agi', 'spd', 'vit', 'dex', 'luk'];
-      const ACC_ICONS = { str: '💪', agi: '🐾', spd: '⚡', vit: '❤️', dex: '🎯', luk: '🍀' };
-      for (const key of ACC_STAT_KEYS) {
-        if (item[key]) chips.push(`<span class="equip-stat-chip stat-acc">${ACC_ICONS[key] || ''} ${STAT_LABEL[key] ?? key} +${item[key]}</span>`);
-      }
-    }
-
-    if (chips.length === 0) return '';
-    return `<div class="item-stat-chips">${chips.join('')}</div>`;
+    const badges = buildItemStatBadges(item);
+    if (!badges) return '';
+    return `<div class="item-stat-chips">${badges}</div>`;
   };
 
   const canEquip = (item) => {

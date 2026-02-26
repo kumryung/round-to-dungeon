@@ -3,6 +3,7 @@ import { getState, generateAvailableDungeons, selectMap, selectWanderer, refresh
 import { MAPS } from '../../data/maps.js';
 import { SETTINGS } from '../../data/settings.js';
 import { getLocName, getLocDesc } from '../../utils/i18nUtils.js';
+import { buildItemTooltipHTML } from '../../utils/itemCardUtils.js';
 import { showConfirmModal, showToast } from './townUtils.js';
 import { changeScene } from '../../sceneManager.js';
 
@@ -21,7 +22,17 @@ export function renderDungeon(el) {
     selectMap(dungeonsToShow.find(m => m.id === activeMapId));
   }
 
-  const showWandererSelect = state.selectedMap && !activeMapId;
+  // Prevent wanderer selection UI from opening for cleared/failed maps
+  let isSelectedMapLocked = false;
+  if (state.selectedMap && !activeMapId) {
+    const sStatus = state.dungeonStatuses ? state.dungeonStatuses[state.selectedMap.id] : null;
+    if (sStatus === 'cleared' || sStatus === 'failed') {
+      isSelectedMapLocked = true;
+      selectMap(null); // automatically deselect
+    }
+  }
+
+  const showWandererSelect = state.selectedMap && !activeMapId && !isSelectedMapLocked;
 
   function getActionBarHTML() {
     if (activeMapId && state.selectedMap?.id === activeMapId) {
@@ -37,8 +48,7 @@ export function renderDungeon(el) {
     <div class="tab-panel dungeon-panel fade-in">
       <div class="dungeon-header" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <h2>🗺️ ${t('ui.dungeon.title')}</h2>
-          <p class="dungeon-desc">${t('ui.dungeon.desc', '마을 밖 위험한 던전을 탐험합니다.')}</p>
+          <p class="dungeon-desc" style="color:var(--text-dim);">${t('ui.dungeon.desc', '마을 밖 위험한 던전을 탐험합니다.')}</p>
         </div>
         <button class="btn-town-secondary" id="btnRefreshDungeonList" title="${t('ui.dungeon.refresh_list', '던전 목록 갱신')}" style="padding: 6px 12px; font-size: 0.9rem;">
           🔄 ${t('ui.dungeon.refresh_list', '던전 목록 갱신')}
@@ -110,6 +120,7 @@ export function renderDungeon(el) {
   // Dungeon card click
   el.querySelectorAll('.dungeon-card-large').forEach((card) => {
     card.addEventListener('click', () => {
+      if (card.classList.contains('locked')) return; // 클리어/실패된 던전 클릭 방지
       const map = MAPS.find((m) => m.id === card.dataset.map);
       selectMap(map);
       renderDungeon(el);
@@ -184,7 +195,7 @@ export function renderDungeonInfo(map) {
 }
 
 export function renderWandererSelect(state) {
-  const aliveWanderers = state.recruitedWanderers.filter(w => w.status !== 'dead');
+  const aliveWanderers = state.recruitedWanderers.filter(w => w.status !== 'dead' && w.status !== 'resting');
   if (aliveWanderers.length === 0) {
     return `<div class="wanderer-select"><p class="placeholder-text">${t('ui_messages.recruit_first')}</p></div>`;
   }
@@ -286,7 +297,7 @@ export function renderDungeonPrep(el, map, wanderer) {
   function renderGrid() {
     const makeSlotHTML = (slot, i, type, extraStyle = '') => `
       <div class="storage-slot ${slot ? `grade-${slot.grade}` : 'empty'} prep-slot" data-type="${type}" data-index="${i}" ${extraStyle}>
-        ${slot ? `<span style="pointer-events:none;font-size:1.4em;">${slot.emoji}</span>${slot.qty > 1 ? `<span class="slot-qty" style="pointer-events:none;">${slot.qty}</span>` : ''}<div class="slot-tooltip" style="pointer-events:none;">${getLocName(slot)}<br><small>${getLocDesc(slot)}</small></div>` : ''}
+        ${slot ? `<span style="pointer-events:none;font-size:1.4em;">${slot.emoji}</span>${slot.qty > 1 ? `<span class="slot-qty" style="pointer-events:none;">${slot.qty}</span>` : ''}<div class="slot-tooltip" style="pointer-events:none;">${buildItemTooltipHTML(slot)}</div>` : ''}
       </div>
     `;
 

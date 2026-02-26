@@ -111,6 +111,19 @@ export function rollRandomTraits() {
 
 export { POSITIVE_TRAITS, NEGATIVE_TRAITS };
 
+const RANDOM_NAMES = [
+    "아론", "베일", "카엘", "다리우스", "엘리안", "펜리르", "가위인", "헤르만", "이안", "잭살",
+    "키리온", "루시안", "마일즈", "노아", "오베론", "퍼시벌", "퀸", "라일가르", "사일러스", "트리스탄",
+    "율리스", "발레리우스", "윌리엄", "자비에", "요릭", "제파이르", "그록", "레오디스", "보르단", "칼라드",
+    "아리아", "비앙카", "셀린", "다이아나", "엘레나", "프레야", "기네비어", "헬레나", "이레니아", "조세핀",
+    "카리나", "리리아", "마리엘", "니아", "올리비아", "페넬로페", "퀴아라", "로잘린", "세레나", "테레사",
+    "우르슐라", "비비안", "윈터", "크세니아", "이본느", "자라", "엘리시아", "루미나", "실비아", "플로라",
+    "알파고", "바라트", "크롬", "던칸", "에드가", "파비안", "개빈", "휴고", "이그나츠", "제롬",
+    "클라이브", "레인", "맥스웰", "네빌", "오스워드", "패트릭", "쿠엔틴", "랄프", "세탄", "티모시",
+    "얼문드", "반달", "월리스", "크노소", "야니크", "제우스", "길가메시", "아서", "모르간", "멀린",
+    "란슬롯", "가웨인", "모드레드", "베디비어", "갤러해드", "디루무드", "헥토르", "아킬레스", "파리스", "레오니다스"
+];
+
 /**
  * Generate a randomized wanderer instance from a base template.
  * @param {object} baseChar Character template from CHARACTERS
@@ -119,6 +132,12 @@ export { POSITIVE_TRAITS, NEGATIVE_TRAITS };
 export function generateWandererInstance(baseChar) {
     const freeStats = Math.floor(Math.random() * (baseChar.maxFreeStat - baseChar.minFreeStat + 1)) + baseChar.minFreeStat;
     const instance = JSON.parse(JSON.stringify(baseChar));
+
+    // Assign unique Identity
+    instance.baseId = baseChar.id;
+    instance.id = baseChar.id + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5);
+    instance.name = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
+    delete instance.nameKey; // Remove localized name link so it displays the random name
 
     // Define weights based on className
     let weights = { vit: 1, str: 1, agi: 1, dex: 1, luk: 1, spd: 1 };
@@ -180,7 +199,7 @@ export const CHARACTERS = [
         tier: 1, minFreeStat: 3, maxFreeStat: 6,
         vit: 14, str: 10, agi: 3, spd: 2, dex: 5, luk: 5,
 
-        portrait: '🛡️',
+        portrait: '<img src="assets/characters/warrior.png" class="portrait-img">',
         desc: '전장에서 단련된 전사. 강인한 체력과 힘이 장점이다.',
     },
     {
@@ -194,7 +213,7 @@ export const CHARACTERS = [
         tier: 1, minFreeStat: 4, maxFreeStat: 7,
         vit: 6, str: 3, agi: 10, spd: 5, dex: 8, luk: 7,
 
-        portrait: '🎭',
+        portrait: '<img src="assets/characters/rogue.png" class="portrait-img">',
         desc: '그림자 속의 사냥꾼. 민첩과 명중이 뛰어나다.',
     },
     {
@@ -208,7 +227,7 @@ export const CHARACTERS = [
         tier: 1, minFreeStat: 4, maxFreeStat: 7,
         vit: 10, str: 6, agi: 5, spd: 10, dex: 5, luk: 5,
 
-        portrait: '💃',
+        portrait: '<img src="assets/characters/mercenary.png" class="portrait-img">',
         desc: '번개처럼 빠른 용병. 속도와 선제공격이 특기이다.',
     },
     {
@@ -222,7 +241,7 @@ export const CHARACTERS = [
         tier: 1, minFreeStat: 4, maxFreeStat: 8,
         vit: 8, str: 4, agi: 7, spd: 4, dex: 12, luk: 5,
 
-        portrait: '🎯',
+        portrait: '<img src="assets/characters/archer.png" class="portrait-img">',
         desc: '백발백중의 궁수. 원거리에서 적을 제압한다.',
     },
     {
@@ -236,7 +255,7 @@ export const CHARACTERS = [
         tier: 1, minFreeStat: 5, maxFreeStat: 10,
         vit: 9, str: 5, agi: 6, spd: 4, dex: 5, luk: 15,
 
-        portrait: '🤠',
+        portrait: '<img src="assets/characters/explorer.png" class="portrait-img">',
         desc: '미지의 땅을 누비는 탐험가. 뛰어난 운으로 보물을 잘 찾는다.',
     },
     {
@@ -250,7 +269,7 @@ export const CHARACTERS = [
         tier: 1, minFreeStat: 3, maxFreeStat: 5,
         vit: 12, str: 8, agi: 4, spd: 2, dex: 6, luk: 4,
 
-        portrait: '💂',
+        portrait: '<img src="assets/characters/guard.png" class="portrait-img">',
         desc: '마을을 지키던 노련한 경비병. 방어력이 안정적이다.',
     },
     {
@@ -264,7 +283,7 @@ export const CHARACTERS = [
         tier: 2, minFreeStat: 6, maxFreeStat: 12,
         vit: 18, str: 15, agi: 2, spd: 1, dex: 3, luk: 3,
 
-        portrait: '👹',
+        portrait: '<img src="assets/characters/berserker.png" class="portrait-img">',
         desc: '분노에 휩싸인 광전사. 압도적인 힘으로 적을 부순다.',
     },
     {
@@ -278,7 +297,7 @@ export const CHARACTERS = [
         tier: 2, minFreeStat: 8, maxFreeStat: 14,
         vit: 8, str: 7, agi: 14, spd: 12, dex: 8, luk: 6,
 
-        portrait: '🧥',
+        portrait: '<img src="assets/characters/duelist.png" class="portrait-img">',
         desc: '화려한 검술의 결투가. 빠른 속도로 전장을 휘젓는다.',
     },
     {
@@ -292,7 +311,7 @@ export const CHARACTERS = [
         tier: 3, minFreeStat: 10, maxFreeStat: 20,
         vit: 25, str: 18, agi: 3, spd: 2, dex: 5, luk: 7,
 
-        portrait: '👼',
+        portrait: '<img src="assets/characters/paladin.png" class="portrait-img">',
         desc: '신의 가호를 받는 기사. 죽음을 두려워하지 않는 생존력을 가졌다.',
     },
     {
@@ -306,7 +325,7 @@ export const CHARACTERS = [
         tier: 3, minFreeStat: 15, maxFreeStat: 25,
         vit: 7, str: 5, agi: 20, spd: 18, dex: 15, luk: 10,
 
-        portrait: '🥷',
+        portrait: '<img src="assets/characters/assassin.png" class="portrait-img">',
         desc: '심연에서 온 암살자. 적이 눈치채기 전에 숨통을 끊는다.',
     },
 ];

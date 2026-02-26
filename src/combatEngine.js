@@ -1,9 +1,9 @@
-// ─── Combat Engine ───
+﻿// ─── Combat Engine ───
 // Handles turn-based combat logic: initiative, hit/damage, flee, monster AI
 
 import { getDungeonState, getSanityStatus, applyStatusEffect } from './dungeonState.js';
 import { SETTINGS } from './data/settings.js';
-import { getInventory, getWeaponDamage, degradeWeapon } from './inventory.js';
+import { getInventory, getWeaponDamage, degradeWeapon, getWeightStatus } from './inventory.js';
 import { setActiveDungeon } from './gameState.js';
 import { t } from './i18n.js';
 
@@ -29,8 +29,20 @@ export function initCombat(wanderer, monster) {
     const weapon = inv?.equipped;
     const baseAtk = weapon ? Math.round((weapon.dmgMin + weapon.dmgMax) / 2) : wanderer.str + 5;
 
-    // ATB tick: maxTick = 100 / SPD (floating-point)
-    const playerMaxTick = parseFloat((100 / Math.max(1, wanderer.spd)).toFixed(2));
+    // ATB tick: maxTick = 100 / SPD, scaled by inventory weight tier
+    const basePlayerTick = parseFloat((100 / Math.max(1, wanderer.spd)).toFixed(2));
+    const weightSt = getWeightStatus(wanderer.str || 0);
+    let playerMaxTick;
+    if (weightSt.tier === 0) {
+        // Light: ATB tick 10% faster (ceil so e.g. 10->9, 9->9)
+        playerMaxTick = Math.ceil(basePlayerTick * weightSt.atbMult);
+    } else if (weightSt.tier >= 2) {
+        // Heavy/VeryHeavy/Extreme: ATB tick 10-30% slower (floor)
+        playerMaxTick = Math.floor(basePlayerTick * weightSt.atbMult);
+    } else {
+        // Normal: no change
+        playerMaxTick = basePlayerTick;
+    }
     const monsterEntry = {
         ...monster,
         nameKey: monster.id ? `monsters.${monster.id}.name` : null,

@@ -96,9 +96,58 @@ export const SETTINGS = {
     // ─── Weight System ───
     baseMaxWeight: 50,                          // Base carrying capacity (regardless of STR)
     strWeightBonus: 5,                          // Extra carry weight per 1 STR
-    // Weight ratio thresholds [optimal end, loaded end, overloaded end, critical end]
-    weightThresholds: [0.5, 0.75, 0.90, 1.0],
-    // Move dice max values per tier [optimal, loaded, overloaded, critical, exceeded]
-    weightDiceMax: [6, 5, 4, 3, 2],
-    weightTierIcons: ['', '⚖️', '🎒', '🐢', '❌'],
+    // Weight ratio thresholds — values mark the START of each tier:
+    // tier 0 = Light (0~19%), tier 1 = Normal(20~49%), tier 2 = Heavy(50~79%), tier 3 = Very Heavy(80~89%), tier 4 = Extreme(90%+)
+    weightThresholds: [0.20, 0.50, 0.80, 0.90],
+    // ATB tick multipliers per tier (Light, Normal, Heavy, VeryHeavy, Extreme)
+    // Applied with ceil for Light (lower is faster), floor for Heavy tiers (higher is slower)
+    weightAtbMult: [0.9, 1.0, 1.1, 1.2, 1.3],
+    // Move/Spawn dice final value penalty per tier (subtracted from result, min 1)
+    weightDicePenalty: [0, 0, 0, -1, -3],
+    weightTierIcons: ['🪶', '', '⚖️', '🎒', '🐢'],
+    weightTierNames: ['weight.light', 'weight.normal', 'weight.heavy', 'weight.very_heavy', 'weight.extreme'],
+
+    // ─── Building System ───
+    buildings: {
+        ids: ['castle', 'lodge', 'guild', 'storage', 'shop', 'blacksmith', 'inn'],
+        maxLevel: 10,
+        // Upgrade costs per level (index 0 = Lv.1->2, index 1 = Lv.2->3, etc.)
+        upgradeCosts: [
+            { gold: 500, materials: { mat_wood: 5 }, timeSec: 60 },          // Lv.1 -> 2
+            { gold: 1000, materials: { mat_wood: 10, mat_iron_ore: 2 }, timeSec: 180 }, // Lv.2 -> 3
+            { gold: 2000, materials: { mat_wood: 15, mat_iron_ore: 5 }, timeSec: 300 }, // Lv.3 -> 4
+            { gold: 3500, materials: { mat_wood: 25, mat_iron_ore: 10 }, timeSec: 600 }, // Lv.4 -> 5
+            { gold: 5000, materials: { mat_wood: 40, mat_iron_ore: 20 }, timeSec: 1200 }, // Lv.5 -> 6
+            { gold: 7500, materials: { mat_wood: 60, mat_iron_ore: 35 }, timeSec: 1800 }, // Lv.6 -> 7
+            { gold: 10000, materials: { mat_wood: 80, mat_iron_ore: 50 }, timeSec: 2400 }, // Lv.7 -> 8
+            { gold: 15000, materials: { mat_wood: 120, mat_iron_ore: 80 }, timeSec: 3600 }, // Lv.8 -> 9
+            { gold: 25000, materials: { mat_wood: 200, mat_iron_ore: 120 }, timeSec: 7200 }, // Lv.9 -> 10
+        ]
+    },
+
+    // ─── Inn (여관) ───
+    inn: {
+        baseSlots: 2,             // Default resting slots available
+        goldPerHp: 2,             // Gold cost per 1 HP to recover
+        goldPerSanity: 3,         // Gold cost per 1 Sanity to recover
+        secPerHp: 1,              // Seconds required per 1 HP to recover
+        secPerSanity: 2,          // Seconds required per 1 Sanity to recover
+    },
+
+    // ─── Building Level Bonuses ───
+    // index 0 = Lv.1, index 9 = Lv.10
+    buildingBonuses: {
+        lodge: {
+            maxWanderers: [4, 5, 5, 6, 6, 7, 7, 8, 9, 10],
+        },
+        inn: {
+            maxRestSlots: [2, 2, 3, 3, 4, 4, 5, 5, 6, 6],
+        },
+        storage: {
+            maxSlots: [30, 35, 40, 45, 50, 55, 60, 65, 70, 80],
+        },
+        guild: {
+            openSlots: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+        },
+    },
 };

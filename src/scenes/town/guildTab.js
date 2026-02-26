@@ -1,7 +1,8 @@
 import { t } from '../../i18n.js';
-import { getState, checkAndRefreshAll, recruitWanderer } from '../../gameState.js';
+import { getState, checkAndRefreshAll, recruitWanderer, getMaxWandererSlots } from '../../gameState.js';
 import { SETTINGS } from '../../data/settings.js';
-import { showToast, formatTimeRemaining } from './townUtils.js';
+import { showToast, formatTimeRemaining, refreshCurrencyDisplay } from './townUtils.js';
+import { renderBuildingHeader, attachBuildingHeaderEvents } from './buildingHeader.js';
 
 export function renderGuild(el, isRefresh = false) {
   checkAndRefreshAll();
@@ -14,12 +15,19 @@ export function renderGuild(el, isRefresh = false) {
 
   el.innerHTML = `
     <div class="tab-panel guild-panel ${isRefresh ? '' : 'fade-in'}">
-      <div class="guild-header" style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 20px;">
+      ${renderBuildingHeader('guild')}
+      <div class="guild-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
         <div class="guild-title-group">
-          <h2>⚔️ ${t('ui.town.tabs.guild', '길드')}</h2>
           <p style="color:var(--text-dim); margin-top:5px;">${t('ui.guild.desc', '새로운 동료를 고용할 수 있습니다.')}</p>
         </div>
         <div class="header-right-group" style="display:flex; flex-direction:row; align-items:center; gap: 8px;">
+          <div class="refresh-banner" style="margin: 0; padding: 8px 12px;">
+            <div class="refresh-info-main">
+              <span class="refresh-icon">🕓</span>
+              <span class="refresh-label">${t('ui.guild.refresh_label')}</span>
+              <span class="refresh-timer" data-timer-type="next-hour">${timeText}</span>
+            </div>
+          </div>
           <div class="premium-refresh-container" style="display:flex; align-items:center; gap: 10px; background:var(--bg-surface); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
             <div style="display:flex; flex-direction:column; align-items:flex-end;">
               <small style="color:var(--text-dim); font-size:0.8em;">${t('ui.town.daily_limit', { current: state.todayGuildRefreshes, max: SETTINGS.maxDailyRefreshes })}</small>
@@ -28,20 +36,22 @@ export function renderGuild(el, isRefresh = false) {
               💎 ${SETTINGS.guildRefreshCostDiamond} ${t('ui.town.premium_refresh')}
             </button>
           </div>
-          <div class="refresh-banner" style="margin: 0; padding: 8px 12px;">
-            <div class="refresh-info-main">
-              <span class="refresh-icon">🕒</span>
-              <span class="refresh-label">${t('ui.guild.refresh_label')}</span>
-              <span class="refresh-timer" data-timer-type="next-hour">${timeText}</span>
-            </div>
-          </div>
         </div>
       </div>
       <div class="char-grid">
-         ${state.availableWanderers.map((ch) => {
+         ${state.availableWanderers.map((ch, index) => {
+    if (ch === null) {
+      // Locked slot
+      const reqLevel = SETTINGS.buildingBonuses.guild.openSlots.findIndex(num => num > index) + 1;
+      return `
+            <div class="char-card locked" style="display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0.5;">
+              <div style="font-size:2rem;">🔒</div>
+              <div style="margin-top:8px; color:var(--text-dim); font-size:0.85rem;">👷 ${t('ui.guild.slot_locked', { level: reqLevel }).replace('{level}', reqLevel)}</div>
+            </div>`;
+    }
     // Check if THIS SPECIFIC INSTANCE is recruited
     const isThisInstanceRecruited = state.recruitedWanderers.some(w => w === ch) || ch.isRecruited;
-    const isFull = state.recruitedWanderers.length >= state.maxWandererLimit;
+    const isFull = state.recruitedWanderers.length >= getMaxWandererSlots();
     const traits = ch.traits || [];
     const tierClass = `tier-${ch.tier}`;
 
@@ -95,6 +105,7 @@ export function renderGuild(el, isRefresh = false) {
       const instance = state.availableWanderers.find((c) => c.id === id);
       if (instance && !instance.isRecruited) {
         recruitWanderer(instance);
+        refreshCurrencyDisplay();
         renderGuild(el);
       }
     });
@@ -113,6 +124,7 @@ export function renderGuild(el, isRefresh = false) {
       }
       import('../../gameState.js').then(({ premiumRefreshGuild }) => {
         if (premiumRefreshGuild()) {
+          refreshCurrencyDisplay();
           renderGuild(el);
         }
       });

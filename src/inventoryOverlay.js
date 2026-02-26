@@ -9,6 +9,7 @@ import { gradeColor } from './data/weapons.js';
 import { SETTINGS } from './data/settings.js';
 import { playSFX } from './soundEngine.js';
 import { t } from './i18n.js';
+import { buildItemStatBadges, buildItemReqBadges } from './utils/itemCardUtils.js';
 
 // ─── Public API ───
 
@@ -52,6 +53,16 @@ export function showItemToast(item) {
 
 // ─── Internal rendering ───
 
+function buildItemStatsHTML(item) {
+    if (!item) return '';
+    const statBadges = buildItemStatBadges(item);
+    const reqBadges = buildItemReqBadges(item);
+    let html = '';
+    if (statBadges) html += `<div class="item-badge-row">${statBadges}</div>`;
+    if (reqBadges) html += `<div class="item-badge-row item-badge-row-reqs">${reqBadges}</div>`;
+    return html.replace(/"/g, '&quot;');
+}
+
 function buildPanelContent(inv) {
     const w = inv.equipped;
     let equipHTML = '';
@@ -67,7 +78,7 @@ function buildPanelContent(inv) {
                  data-id="${w.id}"
                  data-tooltip-title="${w.emoji} ${w.nameKey ? t(w.nameKey) : w.name}"
                  data-tooltip-desc="${w.descKey ? t(w.descKey) : w.desc}"
-                 data-tooltip-stats="DMG ${w.dmgMin}~${w.dmgMax} | ${t('ui.equip.durability')} ${w.durability === Infinity ? '∞' : w.durability}">
+                 data-tooltip-stats="${buildItemStatsHTML(w)}">
                 <span class="slot-emoji-in">${w.emoji}</span>
                 <div class="slot-dur-bar" style="border-top-color: ${durColor}; width: ${durPct}%;"></div>
                 ${isBroken ? `<div class="slot-broken-mark">❌</div>` : ''}
@@ -137,9 +148,7 @@ function renderSlot(item, index, isSafe) {
     const color = item.grade ? gradeColor(item.grade) : 'var(--text-dim)';
 
     // Weapon stats?
-    let stats = '';
-    if (item.dmgMin) stats = `DMG ${item.dmgMin}~${item.dmgMax}`;
-    else if (item.value) stats = t('ui.equip.effect_amount', { value: item.value });
+    let stats = buildItemStatsHTML(item);
 
     return `
     <div class="inv-slot-in inv-has-item-in grade-${item.grade}" data-idx="${index}" data-type="${isSafe ? 'safeBag' : 'slots'}" data-safe="${isSafe}" draggable="true"
@@ -257,7 +266,7 @@ function showTooltip(e, el) {
     tooltip.innerHTML = `
         <div class="tooltip-title">${title}</div>
         <div class="tooltip-desc">${desc}</div>
-        ${stats ? `<div class="tooltip-stats">${stats}</div>` : ''}
+        ${stats ? stats : ''}
     `;
     tooltip.classList.add('visible');
     moveTooltip(e);

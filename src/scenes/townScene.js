@@ -27,7 +27,8 @@ export function mount(container) {
       <!-- Building tabs -->
       <nav class="town-tabs">
         <button class="town-tab active" data-tab="castle">🏰 ${t('ui.town.tabs.castle')}</button>
-        <button class="town-tab" data-tab="wanderers">👥 ${t('ui.town.tabs.wanderers')}</button>
+        <button class="town-tab" data-tab="lodge">👥 ${t('ui.town.tabs.lodge')}</button>
+        <button class="town-tab" data-tab="inn">🏨 ${t('ui.town.tabs.inn')}</button>
         <button class="town-tab" data-tab="guild">⚔️ ${t('ui.town.tabs.guild')}</button>
         <button class="town-tab" data-tab="storage">📦 ${t('ui.town.tabs.storage')}</button>
         <button class="town-tab" data-tab="shop">🛍️ ${t('ui.town.tabs.shop')}</button>
@@ -93,7 +94,10 @@ function renderTab(tabName, isRefresh = false) {
   const currencyBar = document.getElementById('townCurrencyBar');
 
   if (tabName === 'castle') renderCastle(content);
-  else if (tabName === 'wanderers') renderWanderers(content);
+  else if (tabName === 'lodge') renderWanderers(content);
+  else if (tabName === 'inn') {
+    import('./town/innTab.js').then(module => module.renderInn(content));
+  }
   else if (tabName === 'guild') renderGuild(content, isRefresh);
   else if (tabName === 'storage') renderStorage(content);
   else if (tabName === 'shop') renderShop(content, isRefresh);

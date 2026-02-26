@@ -1,4 +1,4 @@
-// ─── Inventory System ───
+﻿// ─── Inventory System ───
 // 12 general slots + 2 safe bag slots, equipped weapon, weight
 
 import { getWeapon, WEAPONS } from './data/weapons.js';
@@ -275,8 +275,10 @@ export function getWeightStatus(str = 0) {
         ratio,
         current: curW,
         max: maxW,
-        diceMax: SETTINGS.weightDiceMax[tier],
+        atbMult: SETTINGS.weightAtbMult[tier],
+        dicePenalty: SETTINGS.weightDicePenalty[tier],
         icon: SETTINGS.weightTierIcons[tier],
+        tierName: SETTINGS.weightTierNames[tier],
     };
 }
 

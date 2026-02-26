@@ -1,10 +1,12 @@
 import { t } from '../../i18n.js';
-import { getState, craftItem, unlockRecipe } from '../../gameState.js';
+import { getState, craftItem, unlockRecipe, getBuildingLevel } from '../../gameState.js';
 import { RECIPES } from '../../data/recipes.js';
 import { ITEMS } from '../../data/items.js';
 import { WEAPONS } from '../../data/weapons.js';
 import { getLocName } from '../../utils/i18nUtils.js';
 import { showToast } from './townUtils.js';
+import { buildItemStatBadges, buildItemReqBadges } from '../../utils/itemCardUtils.js';
+import { renderBuildingHeader, attachBuildingHeaderEvents } from './buildingHeader.js';
 
 export function renderBlacksmith(el) {
   const state = getState();
@@ -20,9 +22,9 @@ export function renderBlacksmith(el) {
 
   el.innerHTML = `
     <div class="tab-panel blacksmith-panel fade-in">
-      <div class="panel-header" style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 20px;">
+      ${renderBuildingHeader('blacksmith')}
+      <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
         <div class="blacksmith-title-group">
-          <h2>⚒️ ${t('ui.blacksmith.title')}</h2>
           <p style="color:var(--text-dim); margin-top:5px;">${t('ui.blacksmith.desc')}</p>
         </div>
         <div class="header-right-group" style="display:flex; flex-direction:column; align-items:flex-end; gap: 8px;">
@@ -38,11 +40,16 @@ export function renderBlacksmith(el) {
     const resultItem = WEAPONS[recipe.result] || ITEMS[recipe.result];
     const canCraft = recipe.ingredients.every(ing => getMaterialQty(ing.id) >= ing.qty);
     const isUnlocked = state.unlockedRecipes.includes(recipe.result);
+    const blacksmithLevel = getBuildingLevel('blacksmith');
+    const reqLv = recipe.reqBlacksmithLv || recipe.reqCastleLv || 1;
+
+    // Hide recipes requiring higher blacksmith level than current (neither locked UI shown)
+    if (blacksmithLevel < reqLv) return '';
 
     // Check unlock requirements
     const hasScroll = state.storage.some(s => s && s.id === recipe.reqItem);
-    const castleMet = state.castleLevel >= recipe.reqCastleLv;
-    const canUnlock = hasScroll && castleMet;
+    const blacksmithMet = blacksmithLevel >= reqLv;
+    const canUnlock = hasScroll && blacksmithMet;
 
     // Filter Logic
     if (state.blacksmithFilters.showCraftable && !canCraft) return '';
@@ -70,7 +77,6 @@ export function renderBlacksmith(el) {
                 </div>
                 <div class="row-reqs">
                   <span class="${hasScroll ? 'met' : 'needed'}">${scrollItem ? scrollItem.emoji : '📜'} ${t('ui.blacksmith.req_recipe')}</span>
-                  <span class="${castleMet ? 'met' : 'needed'}">🏰 ${t('ui.blacksmith.req_castle', { level: recipe.reqCastleLv })}</span>
                 </div>
                 <div class="row-action">
                   <button class="btn-unlock btn-town-secondary" data-id="${recipe.result}" ${canUnlock ? '' : 'disabled'}>
@@ -81,13 +87,11 @@ export function renderBlacksmith(el) {
             `;
     }
 
-    let reqsHtml = '';
-    if (resultItem.reqStats && Object.keys(resultItem.reqStats).length > 0) {
-      const badges = Object.entries(resultItem.reqStats).map(([s, val]) => {
-        return `<span class="req-stat" style="display:inline-block; margin-right:4px; margin-top:2px;">${s.toUpperCase()} ${val}</span>`;
-      }).join('');
-      reqsHtml = `<div style="margin-top:2px;">${badges}</div>`;
+    let statBadges = '';
+    if (resultItem.type === 'weapon' || resultItem.dmgMin !== undefined) {
+      statBadges = buildItemStatBadges(resultItem);
     }
+    const reqBadges = buildItemReqBadges(resultItem);
 
     // Unlocked State
     return `
@@ -97,7 +101,8 @@ export function renderBlacksmith(el) {
                 <div class="info-text">
                   <span class="item-name">${getLocName(resultItem)}</span>
                   <span class="item-grade grade-${resultItem.grade}">${t('grades.' + resultItem.grade) || resultItem.grade}</span>
-                  ${reqsHtml}
+                  ${statBadges ? `<div class="item-badge-row" style="margin-top:4px;">${statBadges}</div>` : ''}
+                  ${reqBadges ? `<div class="item-badge-row item-badge-row-reqs">${reqBadges}</div>` : ''}
                 </div>
               </div>
               <div class="row-mats">
@@ -147,4 +152,6 @@ export function renderBlacksmith(el) {
       }
     };
   });
+
+  attachBuildingHeaderEvents(el);
 }

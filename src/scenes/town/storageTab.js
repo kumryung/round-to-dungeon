@@ -1,44 +1,65 @@
 import { t } from '../../i18n.js';
-import { getState, sortStorage, updateSortOrder } from '../../gameState.js';
+import { getState, sortStorage, updateSortOrder, getMaxStorageSlots } from '../../gameState.js';
 import { SETTINGS } from '../../data/settings.js';
-import { getLocName, getLocDesc } from '../../utils/i18nUtils.js';
+import { getLocName } from '../../utils/i18nUtils.js';
+import { buildItemTooltipHTML } from '../../utils/itemCardUtils.js';
+import { renderBuildingHeader, attachBuildingHeaderEvents } from './buildingHeader.js';
+
+// Storage filter state
+let currentStorageFilter = 'all';
 
 export function renderStorage(el) {
   const state = getState();
+  const maxSlots = getMaxStorageSlots();
   const usedSlots = state.storage.filter(s => s !== null).length;
-  const upgradeCost = state.storageMaxSlots * 50;
-  const canUpgrade = state.gold >= upgradeCost && state.storageMaxSlots < 100;
+
+  // Ensure storage array is large enough
+  while (state.storage.length < maxSlots) state.storage.push(null);
+
+  // Filter logic
+  const filteredSlots = state.storage.map((slot, i) => ({ slot, i })).filter(({ slot }) => {
+    if (currentStorageFilter === 'all') return true;
+    if (!slot) return false;
+    return slot.type === currentStorageFilter;
+  });
+
+  const filterTabs = [
+    { id: 'all', label: `🗃️ ${t('ui.storage.filter_all', '전체')}` },
+    { id: 'consumable', label: `🧪 ${t('ui.storage.filter_consumable', '소모품')}` },
+    { id: 'material', label: `⛏️ ${t('ui.storage.filter_material', '재료')}` },
+    { id: 'weapon', label: `⚔️ ${t('ui.storage.filter_weapon', '무기')}` },
+    { id: 'armor', label: `🛡️ ${t('ui.storage.filter_armor', '방어구')}` },
+    { id: 'accessory', label: `💍 ${t('ui.storage.filter_accessory', '악세사리')}` },
+  ];
 
   el.innerHTML = `
     <div class="tab-panel storage-panel fade-in">
-      <div class="panel-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
+      ${renderBuildingHeader('storage')}
+      <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
         <div>
-          <h2>📦 ${t('ui.storage.title')} (${usedSlots}/${state.storageMaxSlots})</h2>
-          <div class="storage-controls" style="margin-top: 10px;">
-            <button id="btnSortStorage" class="btn-town-secondary" title="${t('ui.storage.sort')}">🧹 ${t('ui.storage.sort')}</button>
-            <button id="btnSortOrder" class="btn-town-secondary" title="${t('ui.storage.order')}">⚙️ ${t('ui.storage.order')}</button>
-          </div>
+          <p style="color:var(--text-dim); margin-top:5px;">${t('ui.storage.desc', '탐험에서 획득한 아이템을 보관합니다.')}</p>
         </div>
-        <div class="roster-info" style="display:flex; align-items:center; gap: 10px; background:var(--bg-surface); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
-          <div style="display:flex; flex-direction:column; align-items:flex-end;">
-            <small style="color:var(--text-dim); font-size:0.8em;">${t('ui.storage.title')}: ${state.storageMaxSlots} / 100</small>
-          </div>
-          ${state.storageMaxSlots < 100
-      ? `<button id="btnUpgradeStorage" class="btn-town-secondary" ${canUpgrade ? '' : 'disabled'} title="${t('ui.storage.expand')}">
-                  💎 ${SETTINGS.storageExpandCostDiamond} ${t('ui.town.expand_roster', '확장')}
-                </button>`
-      : `<span style="color:var(--gold); font-size: 0.9em;">(최대)</span>`
-    }
+        <div style="display:flex; align-items:center; gap: 8px; background:var(--bg-surface); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+          <small style="color:var(--text-dim); font-size:0.8em;">${t('ui.storage.title')}: ${usedSlots}/${maxSlots}</small>
+          <button id="btnSortStorage" class="btn-town-secondary" title="${t('ui.storage.sort')}">🧹 ${t('ui.storage.sort')}</button>
+          <button id="btnSortOrder" class="btn-town-secondary" title="${t('ui.storage.order')}">⚙️ ${t('ui.storage.order')}</button>
         </div>
       </div>
 
+      <!-- Filter tabs -->
+      <div class="storage-filter-tabs" style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+        ${filterTabs.map(f => `
+          <button class="btn-shop-tab ${currentStorageFilter === f.id ? 'active' : ''}" data-filter="${f.id}">${f.label}</button>
+        `).join('')}
+      </div>
+
       <div class="storage-grid">
-        ${state.storage.map((slot, i) => `
+        ${filteredSlots.map(({ slot, i }) => `
           <div class="storage-slot ${slot ? `grade-${slot.grade}` : 'empty'}" data-index="${i}">
             ${slot ? `
               <span class="slot-emoji">${slot.emoji}</span>
               ${slot.qty > 1 ? `<span class="slot-qty">${slot.qty}</span>` : ''}
-              <div class="slot-tooltip">${getLocName(slot)}<br><small>${getLocDesc(slot)}</small></div>
+              <div class="slot-tooltip">${buildItemTooltipHTML(slot)}</div>
             ` : ''}
           </div>
         `).join('')}
@@ -46,14 +67,13 @@ export function renderStorage(el) {
     </div>
   `;
 
-  const btnUpgrade = el.querySelector('#btnUpgradeStorage');
-  if (btnUpgrade) {
-    btnUpgrade.onclick = () => {
-      import('../../gameState.js').then(({ upgradeStorage }) => {
-        if (upgradeStorage()) renderStorage(el);
-      });
+  // Filter tab events
+  el.querySelectorAll('[data-filter]').forEach(btn => {
+    btn.onclick = () => {
+      currentStorageFilter = btn.dataset.filter;
+      renderStorage(el);
     };
-  }
+  });
 
   el.querySelector('#btnSortStorage').onclick = () => {
     sortStorage();
@@ -63,6 +83,8 @@ export function renderStorage(el) {
   el.querySelector('#btnSortOrder').onclick = () => {
     renderSortOrderModal(el);
   };
+
+  attachBuildingHeaderEvents(el);
 }
 
 function renderSortOrderModal(parentEl) {

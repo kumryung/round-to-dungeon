@@ -1114,23 +1114,47 @@ button {
 
 .slot-tooltip {
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% + 4px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  padding: 8px;
-  border-radius: 6px;
+  background: rgba(20, 16, 26, 0.97);
+  border: 1px solid var(--border-glow);
+  padding: 10px 12px;
+  border-radius: 8px;
   font-size: 11px;
-  width: 140px;
+  min-width: 180px;
+  max-width: 240px;
+  width: max-content;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s;
-  z-index: 10;
-  text-align: center;
+  z-index: 100;
+  text-align: left;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
-.storage-slot:hover .slot-tooltip {
+.slot-tooltip .tooltip-title {
+  font-weight: 700;
+  font-size: 1.05em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 5px;
+  margin-bottom: 6px;
+}
+
+.slot-tooltip .tooltip-desc {
+  font-size: 0.9em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.slot-tooltip .item-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.storage-slot:hover .slot-tooltip,
+.prep-slot:hover .slot-tooltip {
   opacity: 1;
 }
 
@@ -1981,6 +2005,16 @@ button {
 
 .wanderer-portrait {
   font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wanderer-portrait img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
 }
 
 .wanderer-name {
@@ -2143,6 +2177,13 @@ button {
   color: var(--text);
 }
 
+.topbar-wanderer img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
 /* 3-column body with 2 rows in center */
 .dungeon-body {
   flex: 1;
@@ -2212,6 +2253,15 @@ button {
   font-size: 40px;
   text-align: center;
   margin-bottom: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.hud-portrait img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
 }
 
 .hud-name {
@@ -2499,7 +2549,6 @@ button {
   min-height: 18px;
 }
 
-/* ─── Player Token ─── */
 .player-token {
   position: absolute;
   width: 32px;
@@ -2513,6 +2562,21 @@ button {
   transform: translate(-50%, -50%);
   filter: drop-shadow(0 2px 6px rgba(212, 168, 67, 0.5));
   transition: left 0.3s ease, top 0.3s ease;
+}
+
+.player-token img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.portrait-img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+  vertical-align: middle;
 }
 
 
@@ -3196,6 +3260,16 @@ button {
 
 .combat-player-portrait {
   font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.combat-player-portrait img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
 }
 
 .combat-player-name {
@@ -4986,6 +5060,212 @@ button {
   padding: 8px 0;
 }
 
+/* ─── Building System ─── */
+.building-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.building-title {
+  font-size: 1.25rem;
+  margin: 0;
+  color: var(--text-highlight);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.building-level {
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.building-header-action {
+  display: flex;
+  align-items: center;
+  min-width: 150px;
+  justify-content: flex-end;
+}
+
+.btn-building-upgrade {
+  background: linear-gradient(135deg, #1abc9c, #16a085);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-building-upgrade:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(26, 188, 156, 0.4);
+}
+
+.btn-building-complete {
+  background: linear-gradient(135deg, #e67e22, #d35400);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: bold;
+  animation: pulse-orange 1.5s infinite;
+}
+
+@keyframes pulse-orange {
+  0% {
+    box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.7);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(230, 126, 34, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(230, 126, 34, 0);
+  }
+}
+
+.btn-building-max {
+  background: #555;
+  color: #aaa;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: not-allowed;
+}
+
+.building-upgrade-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+/* ─── Inn System ─── */
+.inn-slots-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.inn-slot {
+  background: var(--surface-light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  text-align: center;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.inn-slot.empty {
+  border: 2px dashed #444;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+
+.inn-slot.empty:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #666;
+}
+
+.inn-slot-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.inn-slot p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.inn-slot.occupied {
+  background: linear-gradient(135deg, rgba(41, 128, 185, 0.1), rgba(44, 62, 80, 0.2));
+  border-color: #2980b9;
+}
+
+.inn-slot .wanderer-portrait {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  margin-bottom: 12px;
+}
+
+.inn-slot-name {
+  font-weight: bold;
+  color: var(--text-highlight);
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.inn-rest-timer {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-family: monospace;
+  color: #3498db;
+  font-size: 1.1rem;
+  margin-top: 8px;
+}
+
+.btn-inn-complete {
+  margin-top: 12px;
+  background: #27ae60;
+  color: white;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  animation: pulse-green 1.5s infinite;
+}
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.7);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(39, 174, 96, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(39, 174, 96, 0);
+  }
+}
+
+.resting-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #c0392b;
+  color: white;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
 .recipe-row.locked .item-emoji {
   filter: grayscale(100%);
 }
@@ -5483,4 +5763,310 @@ button {
 .grade-legendary {
   border-color: #f59e0b !important;
   box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.4), 0 0 8px rgba(245, 158, 11, 0.8) !important;
+}
+
+/* ─── Dice Popup ─── */
+.dice-popup {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 3rem;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  animation: dicePopIn 1s forwards;
+  z-index: 9999;
+  font-family: var(--font-title);
+}
+
+.dice-popup-penalized {
+  color: #f87171;
+  animation: dicePopInRed 1.4s forwards;
+}
+
+.dice-penalty-badge {
+  font-size: 1.4rem;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.2);
+  border: 2px solid #f87171;
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  vertical-align: middle;
+  animation: penaltyBadgePop 0.4s ease-out;
+}
+
+@keyframes dicePopIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -70%) scale(0.5);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -40%) scale(0.9);
+  }
+}
+
+@keyframes dicePopInRed {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -70%) scale(0.5);
+  }
+
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -40%) scale(0.9);
+  }
+}
+
+@keyframes penaltyBadgePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateX(-20px);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.15) translateX(0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+
+/* ─── 2D Portrait Overrides ─── */
+.portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+.char-portrait-small,
+.wanderer-portrait,
+.hud-portrait,
+.combat-player-portrait,
+.w-portrait,
+.player-token {
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#playerToken .portrait-img {
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.w-portrait.dead .portrait-img,
+.portrait-img.dead {
+  filter: grayscale(100%) sepia(30%) hue-rotate(320deg) saturate(300%) brightness(0.6);
+}
+
+/* ─── Unified Item Badge System ─── */
+.item-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.item-badge-row-reqs {
+  margin-top: 4px;
+}
+
+.item-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+/* Stat badge variants */
+.item-badge-atk {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+.item-badge-def {
+  background: rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
+}
+
+.item-badge-hp {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+.item-badge-san {
+  background: rgba(139, 92, 246, 0.18);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  color: #a78bfa;
+}
+
+.item-badge-spd {
+  background: rgba(139, 92, 246, 0.18);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  color: #c4b5fd;
+}
+
+.item-badge-dex {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+}
+
+.item-badge-luk {
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+.item-badge-dur {
+  background: rgba(107, 114, 128, 0.2);
+  border: 1px solid rgba(107, 114, 128, 0.5);
+  color: #9ca3af;
+}
+
+.item-badge-cure {
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+/* Requirement badges - outlined green style */
+.item-badge-req {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  color: #4ade80;
+  font-size: 0.8rem;
+}
+
+/* ─── Unified Item Card ─── */
+.item-card {
+  background: var(--bg-surface, #1a1a2e);
+  border: 1.5px solid var(--border, #333);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.item-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.item-card-emoji {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border, #444);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.item-card-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-card-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  margin-bottom: 3px;
+}
+
+.item-card-desc {
+  color: var(--text-dim, #888);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.item-card-action {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.item-card-badges {
+  margin-top: 8px;
+}
+
+/* ─── Inline Inventory Tooltip (dungeon overlay) ─── */
+#itemTooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--bg-panel, #131320);
+  border: 1.5px solid var(--border, #333);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 160px;
+  max-width: 260px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: none;
+}
+
+#itemTooltip.visible {
+  display: block;
+}
+
+#itemTooltip .tooltip-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 3px;
+}
+
+#itemTooltip .tooltip-desc {
+  color: var(--text-dim, #888);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  margin-bottom: 4px;
 }

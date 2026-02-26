@@ -1,4 +1,4 @@
-// ─── Dungeon State ───
+﻿// ─── Dungeon State ───
 // Manages runtime state during dungeon gameplay (separate from global gameState)
 
 import { setTileObject, movePlayerToken } from './mapEngine.js';
@@ -32,10 +32,10 @@ export function initDungeonState(tiles, mapData, wanderer) {
         sanity: SETTINGS.initialSanity,
         maxSanity: SETTINGS.maxSanity,
         statusEffects: [],  // { type, duration, icon, label }
-        exp: 0,
-        level: 1,
-        expToNext: SETTINGS.expTable[0],
-        freeStatPoints: 0,
+        exp: wanderer.exp || 0,
+        level: wanderer.level || 1,
+        expToNext: SETTINGS.expTable[(wanderer.level || 1) - 1] || SETTINGS.expTable[SETTINGS.expTable.length - 1],
+        freeStatPoints: wanderer.statPoints || 0,
         encounteredEvents: [],
         monstersDefeated: 0,
         eventsEncountered: 0,
@@ -460,14 +460,11 @@ export function executeSpawnPhase() {
  * Returns { roll, steps, stoppedAtStart, finalTile }
  */
 export function executeMovePhase() {
-    // Apply weight-based dice cap
+    // Roll 1d6 raw, then apply weight penalty (min 1)
     const weightStatus = getWeightStatus(ds.wanderer?.str || 0);
-    const diceSides = weightStatus.diceMax;
-    if (weightStatus.tier > 0) {
-        log(t('logs.weight_overloaded', { max: diceSides }) + ` ${weightStatus.icon} (${weightStatus.current}/${weightStatus.max})`);
-    }
-
-    const roll = rollDice(1, diceSides);
+    const rawRoll = rollDice(1, SETTINGS.moveDiceSides); // always 1d6
+    const dicePenalty = weightStatus.dicePenalty || 0;    // 0, -1, or -3
+    const roll = Math.max(1, rawRoll + dicePenalty);
     ds.turn++;
 
     // Sanity drops by cost per move (unless torch buff active)
@@ -477,9 +474,6 @@ export function executeMovePhase() {
     } else {
         log(t('logs.move_dice_torch', { roll }));
     }
-
-    // Tick status effects each move
-    tickStatuses();
 
     const totalTiles = ds.tiles.length;
     let stepsRemaining = roll;
@@ -505,6 +499,10 @@ export function executeMovePhase() {
 
     const result = {
         roll,
+        rawRoll,
+        penaltyApplied: dicePenalty,
+        weightIcon: weightStatus.icon,
+        weightTier: weightStatus.tier,
         path,
         stoppedAtStart,
         finalPosition: currentPos,

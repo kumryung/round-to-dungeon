@@ -1,14 +1,12 @@
 import { t } from '../../i18n.js';
 import { getState } from '../../gameState.js';
 import { MAPS } from '../../data/maps.js';
+import { renderBuildingHeader, attachBuildingHeaderEvents } from './buildingHeader.js';
 
 export function renderCastle(el) {
-    el.innerHTML = `
+  el.innerHTML = `
     <div class="tab-panel castle-panel fade-in">
-      <div class="castle-banner">
-        <div class="castle-icon">🏰</div>
-        <h2>${t('ui.castle.title')}</h2>
-      </div>
+      ${renderBuildingHeader('castle')}
       <div class="castle-message">
         <p class="castle-welcome">${t('ui.castle.welcome')}</p>
         <p>${t('ui.castle.desc')}</p>
@@ -21,4 +19,5 @@ export function renderCastle(el) {
       </div>
     </div>
   `;
+  attachBuildingHeaderEvents(el);
 }

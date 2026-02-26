@@ -126,6 +126,21 @@ const state = {
 
     // Picked Dungeons
     availableDungeons: [],
+
+    // ─── Buildings ───
+    buildings: {
+        castle: { level: 1, upgradeStartedAt: null },
+        lodge: { level: 1, upgradeStartedAt: null }, // 숙소 (기존 wanderers)
+        guild: { level: 1, upgradeStartedAt: null },
+        storage: { level: 1, upgradeStartedAt: null },
+        shop: { level: 1, upgradeStartedAt: null },
+        blacksmith: { level: 1, upgradeStartedAt: null },
+        inn: { level: 1, upgradeStartedAt: null },
+    },
+
+    // ─── Inn (여관) ───
+    // Array of active resting slots. Null = empty.
+    innSlots: [null, null],
 };
 
 // ─── Persistence ───
@@ -159,6 +174,19 @@ export function loadState() {
 
             // Restore available dungeons
             if (parsed.availableDungeons !== undefined) state.availableDungeons = parsed.availableDungeons;
+
+            // Restore Building and Inn State (Migration)
+            if (parsed.buildings) {
+                // Merge in case we added new buildings
+                Object.keys(state.buildings).forEach(bId => {
+                    if (parsed.buildings[bId]) {
+                        state.buildings[bId] = parsed.buildings[bId];
+                    }
+                });
+            }
+            if (parsed.innSlots !== undefined) {
+                state.innSlots = parsed.innSlots;
+            }
 
             // Restore Premium Feature tracking
             if (parsed.todayGuildRefreshes !== undefined) state.todayGuildRefreshes = parsed.todayGuildRefreshes;
@@ -205,8 +233,20 @@ export function loadState() {
                         if (!w.nameKey) w.nameKey = base.nameKey;
                         if (!w.descKey) w.descKey = base.descKey;
                         if (!w.classKey) w.classKey = base.classKey;
+                        // Always sync visual properties in case of patches
+                        w.portrait = base.portrait;
+                        w.classIcon = base.classIcon;
                         // Determine default class name if possible, or leave as is
                         if (!w.className && base.className) w.className = base.className;
+                    }
+                });
+            }
+            if (state.availableWanderers) {
+                state.availableWanderers.forEach(w => {
+                    const base = CHARACTERS.find(c => c.id === w.id);
+                    if (base) {
+                        w.portrait = base.portrait;
+                        w.classIcon = base.classIcon;
                     }
                 });
             }
@@ -217,8 +257,13 @@ export function loadState() {
                     if (!w.nameKey) w.nameKey = base.nameKey;
                     if (!w.descKey) w.descKey = base.descKey;
                     if (!w.classKey) w.classKey = base.classKey;
+                    w.portrait = base.portrait;
+                    w.classIcon = base.classIcon;
                 }
             }
+
+            // Apply retro-active level ups for any bugged wanderers
+            checkAllWandererLevelUps();
 
         } catch (e) {
             console.error("Failed to load save state:", e);
@@ -233,6 +278,32 @@ checkAndRefreshAll();
 export function getState() {
     checkDailyReset();
     return state;
+}
+
+// ─── Building Level Helpers ───
+
+/** 숙소 레벨 기반 최대 방랑자 수 */
+export function getMaxWandererSlots() {
+    const level = getBuildingLevel('lodge');
+    return SETTINGS.buildingBonuses.lodge.maxWanderers[level - 1] ?? 4;
+}
+
+/** 여관 레벨 기반 최대 휴식 슬롯 수 */
+export function getMaxInnSlots() {
+    const level = getBuildingLevel('inn');
+    return SETTINGS.buildingBonuses.inn.maxRestSlots[level - 1] ?? 2;
+}
+
+/** 창고 레벨 기반 최대 아이템 슬롯 수 */
+export function getMaxStorageSlots() {
+    const level = getBuildingLevel('storage');
+    return SETTINGS.buildingBonuses.storage.maxSlots[level - 1] ?? 30;
+}
+
+/** 길드 레벨 기반 오픈 모집 슬롯 수 */
+export function getMaxGuildSlots() {
+    const level = getBuildingLevel('guild');
+    return SETTINGS.buildingBonuses.guild.openSlots[level - 1] ?? 1;
 }
 
 export function checkDailyReset() {
@@ -287,11 +358,16 @@ export function checkAndRefreshGuild() {
 
 /**
  * Refresh the list of available wanderers in the guild.
- * Picks 3 random characters and generates instances.
+ * Picks characters based on guild level and pads locked slots as null.
  */
 export function refreshGuildPool() {
+    const openSlots = getMaxGuildSlots();
+    const totalSlots = SETTINGS.buildingBonuses.guild.openSlots[SETTINGS.buildings.maxLevel - 1]; // max possible
     const shuffled = [...CHARACTERS].sort(() => Math.random() - 0.5);
-    state.availableWanderers = shuffled.slice(0, 3).map(base => generateWandererInstance(base));
+    const picked = shuffled.slice(0, openSlots).map(base => generateWandererInstance(base));
+    // Pad remaining slots with null (locked)
+    while (picked.length < totalSlots) picked.push(null);
+    state.availableWanderers = picked;
 }
 
 export function premiumRefreshGuild() {
@@ -324,7 +400,7 @@ export function refreshShopPool(shopType = null) {
     // ── Consumable shop ──
     if (shopType === null || shopType === 'consumable') {
         state.shopInvConsumable = CONSUMABLE_SHOP_DATA.slots.map(slot => {
-            if (state.castleLevel < slot.unlockLevel) return null;
+            if (getBuildingLevel('shop') < slot.unlockLevel) return null;
             const totalWeight = slot.pool.reduce((sum, e) => sum + e.weight, 0);
             let roll = Math.random() * totalWeight;
             for (const entry of slot.pool) {
@@ -341,7 +417,7 @@ export function refreshShopPool(shopType = null) {
     // ── Equipment shop ──
     if (shopType === null || shopType === 'equipment') {
         state.shopInvEquipment = EQUIPMENT_SHOP_DATA.slots.map(slot => {
-            if (state.castleLevel < slot.unlockLevel) return null;
+            if (getBuildingLevel('shop') < slot.unlockLevel) return null;
             const totalWeight = slot.pool.reduce((sum, e) => sum + e.weight, 0);
             let roll = Math.random() * totalWeight;
             for (const entry of slot.pool) {
@@ -748,7 +824,8 @@ export function sortStorage() {
     });
 
     // 3. 창고 재배정 (남은 공간은 null)
-    const newStorage = new Array(state.storageMaxSlots).fill(null);
+    const maxSlots = getMaxStorageSlots();
+    const newStorage = new Array(maxSlots).fill(null);
     for (let i = 0; i < items.length; i++) {
         newStorage[i] = items[i];
     }
@@ -760,14 +837,25 @@ export function sortStorage() {
 // ─── Wanderers ───
 
 export function recruitWanderer(wandererInst) {
-    // Check max limit
-    if (state.recruitedWanderers.length >= state.maxWandererLimit) return false;
+    console.log("recruitWanderer - Start. Current Gold:", state.gold, "Cost:", SETTINGS.wandererRecruitCost);
+    // Check max limit (dynamic based on lodge level)
+    const maxSlots = getMaxWandererSlots();
+    if (state.recruitedWanderers.length >= maxSlots) {
+        console.log("recruitWanderer - Failed: Roster full. Current Limit:", maxSlots, "Recruited:", state.recruitedWanderers.length);
+        return false;
+    }
 
     // Check if already recruited
-    if (state.recruitedWanderers.find((w) => w.id === wandererInst.id)) return false;
+    if (state.recruitedWanderers.find((w) => w.id === wandererInst.id)) {
+        console.log("recruitWanderer - Failed: Already recruited with ID:", wandererInst.id);
+        return false;
+    }
 
     // Deduct gold
-    if (!useGold(SETTINGS.wandererRecruitCost)) return false;
+    if (!useGold(SETTINGS.wandererRecruitCost)) {
+        console.log("recruitWanderer - Failed: Cannot use gold.");
+        return false;
+    }
 
     wandererInst.isRecruited = true;
     state.recruitedWanderers.push(wandererInst);
@@ -777,6 +865,7 @@ export function recruitWanderer(wandererInst) {
     if (available) available.isRecruited = true;
 
     saveState();
+    console.log("recruitWanderer - Success.");
     return true;
 }
 
@@ -983,16 +1072,205 @@ export function addExpToWanderer(wandererId, amount) {
     if (!wanderer) return;
 
     wanderer.exp += amount;
-    const expNext = wanderer.level * 100; // 단순한 레벨업 공식: Lv * 100
 
-    if (wanderer.exp >= expNext) {
+    let leveledUp = false;
+    while (wanderer.exp >= wanderer.level * 100) {
+        wanderer.exp -= wanderer.level * 100;
         wanderer.level++;
-        wanderer.exp -= expNext;
         wanderer.statPoints += 3; // 레벨업 시 스탯 포인트 3 지급
         // HP/정신력 회복 (선택 사항)
         wanderer.curSanity = Math.min(wanderer.maxSanity, wanderer.curSanity + 20);
+        leveledUp = true;
     }
+
+    if (leveledUp) saveState();
+}
+
+/**
+ * 기존 세이브 파일에서 무한 경험치 적립(100% 초과)된 방랑자들의 레벨업 처리
+ */
+export function checkAllWandererLevelUps() {
+    let changed = false;
+    for (const wanderer of state.recruitedWanderers) {
+        while (wanderer && wanderer.exp >= wanderer.level * 100) {
+            wanderer.exp -= wanderer.level * 100;
+            wanderer.level++;
+            wanderer.statPoints += 3;
+            wanderer.curSanity = Math.min(wanderer.maxSanity, wanderer.curSanity + 20);
+            changed = true;
+        }
+    }
+    if (changed) saveState();
+}
+
+// ─── Building System ───
+
+export function getBuildingLevel(buildingId) {
+    return state.buildings[buildingId]?.level || 1;
+}
+
+export function getBuildingUpgradeStatus(buildingId) {
+    const b = state.buildings[buildingId];
+    if (!b) return null;
+
+    if (!b.upgradeStartedAt) {
+        return { isUpgrading: false, remainingSec: 0, canComplete: false, isMaxLevel: b.level >= SETTINGS.buildings.maxLevel };
+    }
+
+    const costConfig = SETTINGS.buildings.upgradeCosts[b.level - 1];
+    if (!costConfig) return { isUpgrading: false, remainingSec: 0, canComplete: false, isMaxLevel: true };
+
+    const elapsedSec = Math.floor((Date.now() - b.upgradeStartedAt) / 1000);
+    const remainingSec = Math.max(0, costConfig.timeSec - elapsedSec);
+
+    return {
+        isUpgrading: true,
+        remainingSec,
+        canComplete: remainingSec <= 0,
+        isMaxLevel: false
+    };
+}
+
+export function startBuildingUpgrade(buildingId) {
+    const b = state.buildings[buildingId];
+    if (!b || b.level >= SETTINGS.buildings.maxLevel || b.upgradeStartedAt) return false;
+
+    const costConfig = SETTINGS.buildings.upgradeCosts[b.level - 1];
+    if (!costConfig) return false; // Already max level
+
+    // Check Gold
+    if (state.gold < costConfig.gold) return false;
+
+    // Check Materials
+    for (const [matId, qty] of Object.entries(costConfig.materials || {})) {
+        const count = state.storage.filter(s => s && s.id === matId).reduce((acc, curr) => acc + curr.qty, 0);
+        if (count < qty) return false;
+    }
+
+    // Consume Gold
+    state.gold -= costConfig.gold;
+
+    // Consume Materials
+    for (const [matId, qty] of Object.entries(costConfig.materials || {})) {
+        let remaining = qty;
+        for (let i = 0; i < state.storage.length && remaining > 0; i++) {
+            const slot = state.storage[i];
+            if (slot && slot.id === matId) {
+                if (slot.qty > remaining) {
+                    slot.qty -= remaining;
+                    remaining = 0;
+                } else {
+                    remaining -= slot.qty;
+                    state.storage[i] = null;
+                }
+            }
+        }
+    }
+
+    b.upgradeStartedAt = Date.now();
     saveState();
+    return true;
+}
+
+export function completeBuildingUpgrade(buildingId) {
+    const status = getBuildingUpgradeStatus(buildingId);
+    if (!status || !status.isUpgrading || !status.canComplete) return false;
+
+    const b = state.buildings[buildingId];
+    b.level++;
+    b.upgradeStartedAt = null;
+    saveState();
+    return true;
+}
+
+// ─── Inn System ───
+
+export function isWandererResting(wandererId) {
+    const globalW = state.recruitedWanderers.find(w => w.id === wandererId);
+    return globalW && globalW.status === 'resting';
+}
+
+export function getInnSlotStatus(slotIndex) {
+    const slot = state.innSlots[slotIndex];
+    if (!slot) return null;
+
+    const globalW = state.recruitedWanderers.find(w => w.id === slot.wandererId);
+    if (!globalW) return null; // Invalid state
+
+    const elapsedSec = Math.floor((Date.now() - slot.restStartedAt) / 1000);
+    const remainingSec = Math.max(0, slot.restDurationSec - elapsedSec);
+
+    return {
+        wandererId: slot.wandererId,
+        wanderer: globalW,
+        remainingSec,
+        canComplete: remainingSec <= 0
+    };
+}
+
+export function calculateRestCost(wandererId) {
+    const w = state.recruitedWanderers.find(rw => rw.id === wandererId);
+    if (!w) return null;
+
+    const maxHp = 50 + ((w.vit || 0) * SETTINGS.hpPerStatPoint);
+    const maxSanity = SETTINGS.maxSanity;
+
+    const hpMissing = Math.max(0, maxHp - (w.curHp || maxHp));
+    const sanityMissing = Math.max(0, maxSanity - (w.curSanity || maxSanity));
+
+    if (hpMissing === 0 && sanityMissing === 0) return null; // Already full
+
+    const goldCost = (hpMissing * SETTINGS.inn.goldPerHp) + (sanityMissing * SETTINGS.inn.goldPerSanity);
+    const durationSec = (hpMissing * SETTINGS.inn.secPerHp) + (sanityMissing * SETTINGS.inn.secPerSanity);
+
+    return { goldCost, durationSec };
+}
+
+export function startInnRest(slotIndex, wandererId) {
+    if (slotIndex < 0 || slotIndex >= state.innSlots.length) return false;
+    if (state.innSlots[slotIndex] !== null) return false; // Slot full
+    if (isWandererResting(wandererId)) return false; // Already resting
+
+    const w = state.recruitedWanderers.find(rw => rw.id === wandererId);
+    if (!w || w.status === 'dead' || w.status === 'exploring') return false; // Cannot rest
+
+    const costInfo = calculateRestCost(wandererId);
+    if (!costInfo) return false;
+
+    if (state.gold < costInfo.goldCost) return false; // Not enough gold
+
+    // Consume Gold
+    state.gold -= costInfo.goldCost;
+
+    // Set Status
+    w.status = 'resting';
+
+    // Occupy Slot
+    state.innSlots[slotIndex] = {
+        wandererId,
+        restStartedAt: Date.now(),
+        restDurationSec: costInfo.durationSec,
+        goldCost: costInfo.goldCost
+    };
+
+    saveState();
+    return true;
+}
+
+export function completeInnRest(slotIndex) {
+    const status = getInnSlotStatus(slotIndex);
+    if (!status || !status.canComplete) return false;
+
+    const w = state.recruitedWanderers.find(rw => rw.id === status.wandererId);
+    if (w) {
+        w.status = 'idle';
+        w.curHp = 50 + ((w.vit || 0) * SETTINGS.hpPerStatPoint);
+        w.curSanity = SETTINGS.maxSanity;
+    }
+
+    state.innSlots[slotIndex] = null;
+    saveState();
+    return true;
 }
 
 export function selectMap(map) {
@@ -1040,8 +1318,8 @@ export function unlockRecipe(recipeId) {
     // Check if already unlocked
     if (state.unlockedRecipes.includes(recipeId)) return false;
 
-    // Check castle level
-    if (state.castleLevel < recipe.reqCastleLv) return false;
+    // Check blacksmith level (renamed from reqCastleLv)
+    if (getBuildingLevel('blacksmith') < (recipe.reqBlacksmithLv || recipe.reqCastleLv || 1)) return false;
 
     // Check if player has the recipe item
     const scrollIdx = state.storage.findIndex(s => s && s.id === recipe.reqItem);

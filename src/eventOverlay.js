@@ -184,6 +184,22 @@ export function showEventModal(evt, addLog, refreshHUD, refreshInv, onDone) {
             if (!has) { disabled = true; reqLabel = `재료 필요`; }
         }
 
+        const ds = getDungeonState();
+        if (choice.reqTrait) {
+            const hasTrait = ds.wanderer.traits?.includes(choice.reqTrait);
+            if (!hasTrait) { disabled = true; reqLabel = '특성 필요'; }
+        }
+        if (choice.reqStat) {
+            const val = ds.wanderer[choice.reqStat.stat] || 0;
+            if (val < choice.reqStat.min) { disabled = true; reqLabel = `${choice.reqStat.stat.toUpperCase()} ${choice.reqStat.min} 이상 필요`; }
+        }
+        if (choice.reqHp) {
+            if (ds.currentHp < choice.reqHp.min) { disabled = true; reqLabel = `HP ${choice.reqHp.min} 이상 필요`; }
+        }
+        if (choice.reqSanity) {
+            if (ds.sanity < choice.reqSanity.min) { disabled = true; reqLabel = `정신력 ${choice.reqSanity.min} 이상 필요`; }
+        }
+
         const btn = document.createElement('button');
         btn.className = 'btn-event-choice';
         if (disabled) btn.classList.add('disabled');
@@ -210,6 +226,18 @@ export function showEventModal(evt, addLog, refreshHUD, refreshInv, onDone) {
                         const sbIdx = inv.safeBag.findIndex(s => s && s.id === consumeId);
                         if (sbIdx >= 0) removeItem('safeBag', sbIdx);
                     }
+                }
+            }
+
+            // Consume HP/Sanity cost if specified
+            if (!disabled) {
+                const ds = getDungeonState();
+                if (choice.reqHp?.cost) {
+                    ds.currentHp = Math.max(0, ds.currentHp - choice.reqHp.cost);
+                    addLog(`❤️ HP -${choice.reqHp.cost} (선택 비용)`);
+                }
+                if (choice.reqSanity?.cost) {
+                    reduceSanity(choice.reqSanity.cost);
                 }
             }
 

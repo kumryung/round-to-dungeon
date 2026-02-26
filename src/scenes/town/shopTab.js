@@ -1,9 +1,11 @@
 import { t } from '../../i18n.js';
-import { getState, checkAndRefreshAll, buyShopItem, performGachaDraw, premiumRefreshShop } from '../../gameState.js';
+import { getState, checkAndRefreshAll, buyShopItem, performGachaDraw, premiumRefreshShop, getBuildingLevel } from '../../gameState.js';
 import { SETTINGS } from '../../data/settings.js';
 import { getLocName, getLocDesc } from '../../utils/i18nUtils.js';
-import { showToast, formatTimeRemaining } from './townUtils.js';
+import { showToast, formatTimeRemaining, refreshCurrencyDisplay } from './townUtils.js';
 import { playSFX } from '../../soundEngine.js';
+import { buildItemStatBadges, buildItemReqBadges, GRADE_COLOR } from '../../utils/itemCardUtils.js';
+import { renderBuildingHeader, attachBuildingHeaderEvents } from './buildingHeader.js';
 
 let currentShopTab = 'consumable';
 
@@ -42,29 +44,16 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
   // ─── Render Item Grid (Consumable & Equipment) ───
   const renderGrid = (inv) => inv.map((item, i) => {
     if (item === null) {
+      // Determine what shop level is needed based on slot index (matches shops.js unlockLevel)
+      const slotUnlockLv = i >= 8 ? 10 : i >= 7 ? 9 : i >= 5 ? 6 : i >= 4 ? 4 : i >= 1 ? 2 : 1;
       return `<div class="shop-slot locked">
               <span class="lock-icon">🔒</span>
-              <span class="lock-msg">${t('ui.blacksmith.req_castle').replace('{level}', i >= 8 ? 5 : i >= 6 ? 4 : i >= 4 ? 3 : i >= 2 ? 2 : 1)}</span>
+              <span class="lock-msg">상점 Lv.${slotUnlockLv} 필요</span>
             </div>`;
     }
-    const gradeColor = { common: '#aaa', uncommon: '#5b8c5a', magic: '#4a7fb5', rare: '#8b5cf6', epic: '#e06c00', legendary: '#f59e0b' }[item.grade] || '#ccc';
-
-    let statsHtml = '';
-    if (item.type === 'armor') {
-      statsHtml = `<div class="tooltip-stat">🛡 DEF +${item.def || 0}${item.maxHp ? ` / HP +${item.maxHp}` : ''}</div>`;
-    } else if (item.type === 'accessory') {
-      statsHtml = `<div class="tooltip-stat">✨ ${['str', 'agi', 'spd', 'vit'].filter(s => item[s]).map(s => `${s.toUpperCase()}+${item[s]}`).join(' ')}</div>`;
-    } else if (item.type === 'weapon') {
-      statsHtml = `<div class="tooltip-stat">⚔️ DMG ${item.dmgMin || 0}~${item.dmgMax || 0}</div>`;
-    }
-
-    let reqsHtml = '';
-    if (item.reqStats && Object.keys(item.reqStats).length > 0) {
-      const badges = Object.entries(item.reqStats).map(([s, val]) => {
-        return `<span class="req-stat" style="display:inline-block; margin-right:4px; margin-bottom:4px;">${s.toUpperCase()} ${val}</span>`;
-      }).join('');
-      reqsHtml = `<div style="margin-top:6px;">${badges}</div>`;
-    }
+    const gradeColor = GRADE_COLOR[item.grade] || '#ccc';
+    const statBadges = buildItemStatBadges(item);
+    const reqBadges = buildItemReqBadges(item);
 
     return `
             <div class="shop-item-card ${item.bought ? 'bought' : ''}" style="border-top: 3px solid ${gradeColor};">
@@ -74,8 +63,8 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
               <div class="shop-item-tooltip">
                 <div class="tooltip-title" style="color:${gradeColor};">${getLocName(item)}</div>
                 <div class="tooltip-desc">${getLocDesc(item)}</div>
-                ${statsHtml}
-                ${reqsHtml}
+                ${statBadges ? `<div class="item-badge-row" style="margin-top:8px;">${statBadges}</div>` : ''}
+                ${reqBadges ? `<div class="item-badge-row item-badge-row-reqs">${reqBadges}</div>` : ''}
               </div>
 
               <div class="shop-item-buy">
@@ -89,9 +78,13 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
 
   el.innerHTML = `
     <div class="tab-panel shop-panel ${isRefresh ? '' : 'fade-in'}">
-      <div class="shop-header" style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 16px;">
+      ${renderBuildingHeader('shop')}
+      <div class="shop-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
         <div class="shop-title-group">
-          <h2>🛍️ ${t('ui.town.tabs.shop', '상점')}</h2>
+          <p style="color:var(--text-dim); margin-top:5px;">${t('ui.shop.desc', '다양한 아이템을 구매할 수 있습니다.')}</p>
+        </div>
+        <div style="background:var(--bg-surface); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+          <span style="color:var(--text-dim); font-size:0.8em;">🕓 ${timeText}</span>
         </div>
       </div>
 
@@ -177,6 +170,7 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
     btn.addEventListener('click', () => {
       if (buyShopItem(parseInt(btn.dataset.index), btn.dataset.shoptype)) {
         playSFX('itemPickup');
+        refreshCurrencyDisplay();
         renderShop(el, true, tabToRender);
       }
     });
@@ -189,6 +183,7 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
       const result = performGachaDraw(false);
       if (result.success) {
         playSFX('eventGood');
+        refreshCurrencyDisplay();
         showGachaResult(result.items, false, el, tabToRender);
       } else {
         showToast(t('ui.shop.gacha_no_funds', { amount: 100 }));
@@ -217,10 +212,15 @@ export function renderShop(el, isRefresh = false, activeShopTab = null) {
       const currentRefresh = shopType === 'equipment' ? state.todayShopRefreshesEquipment : state.todayShopRefreshesConsumable;
 
       if (currentRefresh >= maxLimit) { showToast(t('ui.town.limit_reached')); return; }
-      if (premiumRefreshShop(shopType)) renderShop(el, false, tabToRender);
+      if (premiumRefreshShop(shopType)) {
+        refreshCurrencyDisplay();
+        renderShop(el, false, tabToRender);
+      }
       else showToast(t('ui.town.not_enough_diamonds', { amount: SETTINGS.shopRefreshCostDiamond }));
     });
   }
+
+  attachBuildingHeaderEvents(el);
 }
 
 function showGachaResult(items, isMulti, el, activeShopTab) {
