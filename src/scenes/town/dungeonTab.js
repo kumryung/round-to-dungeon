@@ -82,23 +82,12 @@ export function renderDungeon(el) {
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
                   <div style="display: flex; justify-content: space-between;">
-                    <span style="color:var(--text-dim);">${t('ui.dungeon.info_monsters')}</span>
-                    <span>${m.dice.monster[0]}~${m.dice.monster[1]}</span>
+                    <span style="color:var(--text-dim);">구조</span>
+                    <span>다층 타일 맵 (${m.floors ? m.floors.length : 1}층)</span>
                   </div>
                   <div style="display: flex; justify-content: space-between;">
-                    <span style="color:var(--text-dim);">${t('ui.dungeon.info_treasure')}</span>
-                    <span>${m.dice.treasure[0]}~${m.dice.treasure[1]}</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between;">
-                    <span style="color:var(--text-dim);">${t('ui.dungeon.info_event')}</span>
-                    <span>${m.dice.event[0]}~${m.dice.event[1]}</span>
-                  </div>
-                </div>
-                
-                <div style="margin-top: 10px;">
-                  <div style="color:var(--text-dim); font-size:0.8rem; margin-bottom: 4px;">${t('ui.dungeon.info_monster_pool')}</div>
-                  <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                    ${m.monsterPool.map((p) => `<span style="background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">${p.replace('m_', '')}</span>`).join('')}
+                    <span style="color:var(--text-dim);">환경</span>
+                    <span>${m.theme}</span>
                   </div>
                 </div>
               </div>
@@ -181,14 +170,8 @@ export function renderDungeonInfo(map) {
       <p class="dungeon-info-desc">${map.descKey ? t(map.descKey) : map.desc}</p>
       <div class="dungeon-info-stats">
         <div class="info-stat"><span class="info-stat-label">${t('ui.dungeon.info_level')}</span><span class="info-stat-value">Lv.${map.mapLv}</span></div>
-        <div class="info-stat"><span class="info-stat-label">${t('ui.dungeon.info_tiles')}</span><span class="info-stat-value">${map.tiles}</span></div>
-        <div class="info-stat"><span class="info-stat-label">${t('ui.dungeon.info_monsters')}</span><span class="info-stat-value">${map.dice.monster[0]}~${map.dice.monster[1]}</span></div>
-        <div class="info-stat"><span class="info-stat-label">${t('ui.dungeon.info_treasure')}</span><span class="info-stat-value">${map.dice.treasure[0]}~${map.dice.treasure[1]}</span></div>
-        <div class="info-stat"><span class="info-stat-label">${t('ui.dungeon.info_event')}</span><span class="info-stat-value">${map.dice.event[0]}~${map.dice.event[1]}</span></div>
-      </div>
-      <div class="dungeon-info-monsters">
-        <span class="info-stat-label">${t('ui.dungeon.info_monster_pool')}</span>
-        <div class="monster-tags">${map.monsterPool.map((m) => `<span class="monster-tag">${m.replace('m_', '')}</span>`).join('')}</div>
+        <div class="info-stat"><span class="info-stat-label">층 수</span><span class="info-stat-value">${map.floors ? map.floors.length : 1} 층</span></div>
+        <div class="info-stat"><span class="info-stat-label">환경</span><span class="info-stat-value">${map.theme}</span></div>
       </div>
     </div>
   `;

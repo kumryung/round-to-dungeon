@@ -226,6 +226,7 @@ export function loadState() {
             // ─── Data Migration: Backfill nameKey/descKey for existing wanderers ───
             if (state.recruitedWanderers) {
                 state.recruitedWanderers.forEach(w => {
+                    if (!w) return;
                     if (!w.status) w.status = 'idle'; // idle | exploring | dead
 
                     const base = CHARACTERS.find(c => c.id === w.id);
@@ -243,6 +244,7 @@ export function loadState() {
             }
             if (state.availableWanderers) {
                 state.availableWanderers.forEach(w => {
+                    if (!w) return;
                     const base = CHARACTERS.find(c => c.id === w.id);
                     if (base) {
                         w.portrait = base.portrait;

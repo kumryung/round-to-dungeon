@@ -1,12 +1,8 @@
 import { KO } from './locales/ko.js';
-import { EN } from './locales/en.js';
-import { JA } from './locales/ja.js';
 import { getState, saveState } from './gameState.js';
 
 const LOCALES = {
     ko: KO,
-    en: EN,
-    ja: JA,
 };
 
 let currentLang = 'ko';

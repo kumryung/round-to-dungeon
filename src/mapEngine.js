@@ -1,107 +1,522 @@
-// ─── Map Engine ───
-// Generates rectangular loop map tiles and renders the board as DOM
-
+import { TILES, TILE_TYPES } from './data/tiles.js';
 import { SETTINGS } from './data/settings.js';
 
+// ─── Grid & Map Generation ───
+
+function getRandomTileByThemeAndType(theme, tileType) {
+    let candidates = Object.values(TILES).filter(t => t.theme === theme && t.tileType === tileType);
+    if (candidates.length === 0) {
+        // Fallback to 'forest' theme if specific theme tiles are missing
+        candidates = Object.values(TILES).filter(t => t.theme === 'forest' && t.tileType === tileType);
+    }
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function getRandomTileFromPool(theme, allowedTypes, excludeTypes = []) {
+    let candidates = Object.values(TILES).filter(t =>
+        t.theme === theme &&
+        allowedTypes.includes(t.tileType) &&
+        !excludeTypes.includes(t.tileType)
+    );
+    if (candidates.length === 0) {
+        // Fallback to 'forest' theme
+        candidates = Object.values(TILES).filter(t =>
+            t.theme === 'forest' &&
+            allowedTypes.includes(t.tileType) &&
+            !excludeTypes.includes(t.tileType)
+        );
+    }
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function getOppositeDirection(dir) {
+    const map = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+    return map[dir];
+}
+
 /**
- * Generate tile array for a rectangular loop map.
- * @param {object} mapData - Map data from maps.js
- * @returns {Array<object>} tiles
+ * Get all global cell coordinates a tile would occupy at a given position
  */
-export function generateTiles(mapData) {
-    const totalTiles = mapData.tiles;
-    const sideLength = totalTiles / 4;
-    const g = sideLength + 1; // gridSize
-    // Corners: top-left(0), top-right(g-1), bottom-right(g + g-2), bottom-left(g + 2*(g-1) - 1)
-    const corners = [0, g - 1, g + (g - 2), g + 2 * (g - 1) - 1];
-
-    const tiles = [];
-    for (let i = 0; i < totalTiles; i++) {
-        const tile = {
-            index: i,
-            type: 'empty',   // empty | start | corner
-            object: null,     // null | 'monster' | 'chest' | 'event'
-            objectData: null, // extra data for the object
-            position: getTilePosition(i, sideLength),
-        };
-
-        if (i === 0) {
-            tile.type = 'start';
-        } else if (corners.includes(i) && i !== 0) {
-            tile.type = 'corner';
+function getTileFootprint(tileDef, globalRow, globalCol) {
+    const coords = [];
+    const layout = tileDef.layout;
+    for (let r = 0; r < layout.length; r++) {
+        for (let c = 0; c < layout[0].length; c++) {
+            if (layout[r][c] === 1) {
+                coords.push(`${globalRow + r},${globalCol + c}`);
+            }
         }
-
-        tiles.push(tile);
     }
-
-    return tiles;
+    return coords;
 }
 
 /**
- * Calculate (row, col) position for a tile index on the rectangular loop.
- * The grid is (sideLength+1) × (sideLength+1) = gridSize × gridSize.
- * Perimeter = 4 * (gridSize - 1) = 4 * sideLength tiles.
- *
- * Traversal: top L→R, right T→B, bottom R→L, left B→T.
- *
- * Visual (sideLength=6, gridSize=7, 24 tiles):
- *    0  1  2  3  4  5  6
- *   23                  7
- *   22                  8
- *   21                  9
- *   20                 10
- *   19                 11
- *   18 17 16 15 14 13 12
+ * Check if a tile placement would overlap with already-occupied cells
  */
-export function getTilePosition(index, sideLength) {
-    const g = sideLength + 1; // gridSize
-
-    // Top edge: g tiles → row=0, col=0..g-1
-    if (index < g) {
-        return { row: 0, col: index };
+function checkOverlap(tileDef, globalRow, globalCol, occupiedSet) {
+    const footprint = getTileFootprint(tileDef, globalRow, globalCol);
+    for (const key of footprint) {
+        if (occupiedSet.has(key)) return true;
     }
-    // Right edge: g-1 tiles → col=g-1, row=1..g-1
-    if (index < g + (g - 1)) {
-        return { row: index - g + 1, col: g - 1 };
-    }
-    // Bottom edge: g-1 tiles → row=g-1, col=g-2..0
-    if (index < g + (g - 1) + (g - 1)) {
-        const offset = index - g - (g - 1);
-        return { row: g - 1, col: g - 2 - offset };
-    }
-    // Left edge: g-2 tiles → col=0, row=g-2..1
-    const offset = index - g - (g - 1) - (g - 1);
-    return { row: g - 2 - offset, col: 0 };
+    return false;
 }
 
 /**
- * Render the board into a container element.
- * @param {string} [theme] - Optional map theme class (e.g. 'forest', 'mine')
+ * Mark cells as occupied
  */
-export function renderBoard(tiles, sideLength, container, theme) {
-    const gridSize = sideLength + 1;
-    container.innerHTML = '';
-    container.className = 'board-grid' + (theme ? ` board-theme-${theme}` : '');
-    container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
-    container.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+function markOccupied(tileDef, globalRow, globalCol, occupiedSet) {
+    const footprint = getTileFootprint(tileDef, globalRow, globalCol);
+    for (const key of footprint) {
+        occupiedSet.add(key);
+    }
+}
 
-    // Create an empty grid (null = "inside" cells)
-    const grid = Array.from({ length: gridSize }, () => Array(gridSize).fill(null));
+/**
+ * Builds a multi-floor dungeon map based on mapData config
+ */
+export function buildDungeonMap(mapData) {
+    const theme = mapData.theme;
+    const dungeonMap = {
+        mapId: mapData.id,
+        theme: theme,
+        floors: [],
+        currentFloor: 0,
+    };
 
-    // Place tiles into grid
-    tiles.forEach((tile) => {
-        grid[tile.position.row][tile.position.col] = tile;
+    mapData.floors.forEach(floorConfig => {
+        const floorMap = autoGenerateFloor(theme, floorConfig);
+        dungeonMap.floors.push(floorMap);
     });
 
-    // Render grid cells
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            const tile = grid[r][c];
-            if (tile) {
-                const el = createTileElement(tile);
+    // Debug: log generated map structure
+    console.log('[MapEngine] Built dungeon map:', dungeonMap.mapId);
+    dungeonMap.floors.forEach((f, i) => {
+        console.log(`  Floor ${i + 1}: grid=${f.gridWidth}x${f.gridHeight}, cells=${f.cells.length}, hub=${f.hubCellIndex}, end=${f.endCellIndex}`);
+        // Log a text representation of the grid
+        const grid = Array.from({ length: f.gridHeight }, () => Array(f.gridWidth).fill('.'));
+        f.cells.forEach(c => {
+            const ch = c.isStart ? 'S' : c.isEnd ? 'E' : c.tileType[0].toUpperCase();
+            grid[c.gr][c.gc] = ch;
+        });
+        grid.forEach((row, ri) => {
+            console.log(`    ${ri}: ${row.join(' ')}`);
+        });
+    });
+
+    return dungeonMap;
+}
+
+/**
+ * Generates a logical grid of cells for a single floor
+ */
+function autoGenerateFloor(theme, floorConfig) {
+    const minTiles = floorConfig.tileCount[0];
+    const maxTiles = floorConfig.tileCount[1];
+    const targetTiles = Math.floor(Math.random() * (maxTiles - minTiles + 1)) + minTiles;
+
+    // Track all occupied cell coordinates globally to prevent overlaps
+    const occupied = new Set();
+
+    // Start by placing the start tile at 0,0
+    const startTileDef = getRandomTileByThemeAndType(theme, floorConfig.startType);
+    if (!startTileDef) throw new Error(`Cannot find start tile for theme ${theme} type ${floorConfig.startType}`);
+
+    const placedTiles = [];
+    placedTiles.push({
+        id: 'tile_0',
+        def: startTileDef,
+        globalRow: 0,
+        globalCol: 0,
+        isStart: true,
+        isEnd: false
+    });
+    markOccupied(startTileDef, 0, 0, occupied);
+
+    // Valid tile types for the middle of the floor (not hub, not exit, not stairs usually)
+    const midTypes = TILE_TYPES.filter(t => t !== 'hub' && t !== 'exit' && t !== 'stairs');
+
+    let currentTiles = 1;
+
+    const openExits = []; // { sourceTileId, dir, r, c }
+
+    function addExits(placedTile) {
+        const { def, globalRow, globalCol } = placedTile;
+        const height = def.layout.length;
+        const width = def.layout[0].length;
+
+        for (const dir in def.exits) {
+            def.exits[dir].forEach(exit => {
+                let nextR, nextC;
+                if (dir === 'top') {
+                    nextR = globalRow - 1;
+                    nextC = globalCol + exit.col;
+                } else if (dir === 'bottom') {
+                    nextR = globalRow + height;
+                    nextC = globalCol + exit.col;
+                } else if (dir === 'left') {
+                    nextR = globalRow + exit.row;
+                    nextC = globalCol - 1;
+                } else if (dir === 'right') {
+                    nextR = globalRow + exit.row;
+                    nextC = globalCol + width;
+                }
+                openExits.push({
+                    sourceTileId: placedTile.id,
+                    dir: dir,
+                    r: nextR,
+                    c: nextC
+                });
+            });
+        }
+    }
+
+    addExits(placedTiles[0]);
+
+    // Add middle tiles
+    let attempts = 0;
+    const maxAttempts = targetTiles * 20; // prevent infinite loops
+    while (currentTiles < targetTiles - 1 && openExits.length > 0 && attempts < maxAttempts) {
+        attempts++;
+        // Pick a random open exit
+        const exitIdx = Math.floor(Math.random() * openExits.length);
+        const targetExit = openExits[exitIdx];
+
+        // Pick a random mid tile
+        const nextDef = getRandomTileFromPool(theme, midTypes);
+        if (!nextDef) continue;
+
+        // Find which local exit on the new tile connects to our open exit's opposite direction
+        const connectDir = getOppositeDirection(targetExit.dir);
+        if (!nextDef.exits[connectDir] || nextDef.exits[connectDir].length === 0) {
+            continue; // Tile doesn't have a matching entrance, skip
+        }
+
+        const entrance = nextDef.exits[connectDir][0];
+        const height = nextDef.layout.length;
+        const width = nextDef.layout[0].length;
+
+        // Calculate globalRow, globalCol based on aligning the entrance to targetExit.r, targetExit.c
+        let globalRow, globalCol;
+
+        // The bridge sits exactly at the target open exit cell
+        const bridgeR = targetExit.r;
+        const bridgeC = targetExit.c;
+
+        if (connectDir === 'top') {
+            globalRow = bridgeR + 1;
+            globalCol = bridgeC - entrance.col;
+        } else if (connectDir === 'bottom') {
+            globalRow = bridgeR - height;
+            globalCol = bridgeC - entrance.col;
+        } else if (connectDir === 'left') {
+            globalRow = bridgeR - entrance.row;
+            globalCol = bridgeC + 1;
+        } else if (connectDir === 'right') {
+            globalRow = bridgeR - entrance.row;
+            globalCol = bridgeC - width;
+        }
+
+        // *** Overlap check – skip if any cell is already occupied ***
+        const bridgeDef = { layout: [[1]], exits: {}, tileType: 'corridor' };
+        if (checkOverlap(bridgeDef, bridgeR, bridgeC, occupied)) {
+            // If we can't build a bridge, remove this exit to prevent infinite loops on a blocked path
+            openExits.splice(exitIdx, 1);
+            continue;
+        }
+        if (checkOverlap(nextDef, globalRow, globalCol, occupied)) {
+            // Temporary failure, keep the exit in the pool to try a smaller tile next time
+            continue;
+        }
+
+        // Success! Remove the exit and mark occupied
+        openExits.splice(exitIdx, 1);
+
+        markOccupied(bridgeDef, bridgeR, bridgeC, occupied);
+        markOccupied(nextDef, globalRow, globalCol, occupied);
+
+        placedTiles.push({
+            id: `bridge_${currentTiles}`,
+            def: bridgeDef,
+            globalRow: bridgeR,
+            globalCol: bridgeC,
+            isStart: false,
+            isEnd: false
+        });
+
+        const newTile = {
+            id: `tile_${currentTiles}`,
+            def: nextDef,
+            globalRow: globalRow,
+            globalCol: globalCol,
+            isStart: false,
+            isEnd: false
+        };
+        placedTiles.push(newTile);
+        addExits(newTile);
+        currentTiles++;
+    }
+
+    // Finally add the end tile
+    const endTileDef = getRandomTileByThemeAndType(theme, floorConfig.endType);
+    let endTilePlaced = false;
+
+    if (openExits.length > 0 && endTileDef) {
+        for (let i = openExits.length - 1; i >= 0; i--) {
+            const targetExit = openExits[i];
+            const connectDir = getOppositeDirection(targetExit.dir);
+            if (endTileDef.exits[connectDir] && endTileDef.exits[connectDir].length > 0) {
+                const entrance = endTileDef.exits[connectDir][0];
+                const height = endTileDef.layout.length;
+                const width = endTileDef.layout[0].length;
+
+                let globalRow, globalCol;
+
+                // The bridge sits exactly at the target open exit cell
+                const bridgeR = targetExit.r;
+                const bridgeC = targetExit.c;
+
+                if (connectDir === 'top') {
+                    globalRow = bridgeR + 1;
+                    globalCol = bridgeC - entrance.col;
+                } else if (connectDir === 'bottom') {
+                    globalRow = bridgeR - height;
+                    globalCol = bridgeC - entrance.col;
+                } else if (connectDir === 'left') {
+                    globalRow = bridgeR - entrance.row;
+                    globalCol = bridgeC + 1;
+                } else if (connectDir === 'right') {
+                    globalRow = bridgeR - entrance.row;
+                    globalCol = bridgeC - width;
+                }
+
+                // Check overlap for bridge and end tile
+                const bridgeDef = { layout: [[1]], exits: {}, tileType: 'corridor' };
+                if (checkOverlap(bridgeDef, bridgeR, bridgeC, occupied)) continue;
+                if (checkOverlap(endTileDef, globalRow, globalCol, occupied)) continue;
+
+                markOccupied(bridgeDef, bridgeR, bridgeC, occupied);
+                markOccupied(endTileDef, globalRow, globalCol, occupied);
+
+                placedTiles.push({
+                    id: `bridge_end`,
+                    def: bridgeDef,
+                    globalRow: bridgeR,
+                    globalCol: bridgeC,
+                    isStart: false,
+                    isEnd: false
+                });
+
+                placedTiles.push({
+                    id: 'tile_end',
+                    def: endTileDef,
+                    globalRow: globalRow,
+                    globalCol: globalCol,
+                    isStart: false,
+                    isEnd: true
+                });
+                endTilePlaced = true;
+                break;
+            }
+        }
+    }
+
+    if (!endTilePlaced) {
+        // Fallback if no matching connection: place it at offset
+        const lastTile = placedTiles[placedTiles.length - 1];
+        const fallbackRow = lastTile.globalRow + lastTile.def.layout.length + 2;
+        const fallbackCol = lastTile.globalCol;
+        // Don't check overlap for fallback — it's a last resort
+        placedTiles.push({
+            id: 'tile_end',
+            def: endTileDef,
+            globalRow: fallbackRow,
+            globalCol: fallbackCol,
+            isStart: false,
+            isEnd: true
+        });
+    }
+
+    // Now, build the logical 1D cell array and adjacency list
+    return compileFloorData(floorConfig.floor, placedTiles);
+}
+
+function compileFloorData(floorNum, placedTiles) {
+    const cells = [];
+    const cellMap = new Map(); // "r,c" -> cell object
+
+    let minR = Infinity, maxR = -Infinity;
+    let minC = Infinity, maxC = -Infinity;
+
+    // 1. Create all cells (skip duplicates at same coordinate)
+    placedTiles.forEach(pt => {
+        const layout = pt.def.layout;
+        for (let r = 0; r < layout.length; r++) {
+            for (let c = 0; c < layout[0].length; c++) {
+                if (layout[r][c] === 1) {
+                    const gr = pt.globalRow + r;
+                    const gc = pt.globalCol + c;
+                    const key = `${gr},${gc}`;
+
+                    // Skip duplicate coordinates (shouldn't happen with overlap check, but be safe)
+                    if (cellMap.has(key)) continue;
+
+                    minR = Math.min(minR, gr);
+                    maxR = Math.max(maxR, gr);
+                    minC = Math.min(minC, gc);
+                    maxC = Math.max(maxC, gc);
+
+                    const cell = {
+                        index: cells.length,
+                        tileId: pt.id,
+                        tileType: pt.def.tileType,
+                        tileDefId: pt.def.id,
+                        theme: pt.def.theme,
+                        localRow: r,
+                        localCol: c,
+                        gr: gr,
+                        gc: gc,
+                        isStart: pt.isStart,
+                        isEnd: pt.isEnd,
+                        object: null,
+                        objectData: null,
+                        visibility: 'hidden' // hidden, fog, visible
+                    };
+                    cells.push(cell);
+                    cellMap.set(key, cell);
+                }
+            }
+        }
+    });
+
+    // 2. Build adjacency list based on physical proximity (4-way)
+    const adjacency = {};
+    cells.forEach(cell => {
+        const neighbors = [];
+        const ds = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // top, bottom, left, right
+        ds.forEach(d => {
+            const nr = cell.gr + d[0];
+            const nc = cell.gc + d[1];
+            const ncell = cellMap.get(`${nr},${nc}`);
+            if (ncell) {
+                neighbors.push(ncell.index);
+            }
+        });
+        adjacency[cell.index] = neighbors;
+    });
+
+    // 3. Normalize coordinates so min is 0,0
+    cells.forEach(c => {
+        c.gr -= minR;
+        c.gc -= minC;
+    });
+
+    const gridWidth = maxC - minC + 1;
+    const gridHeight = maxR - minR + 1;
+
+    // 4. Find the hub cell: prefer the CENTER cell of the start tile
+    const startTile = placedTiles.find(pt => pt.isStart);
+    let hubCellIndex = 0;
+    if (startTile) {
+        const layoutH = startTile.def.layout.length;
+        const layoutW = startTile.def.layout[0].length;
+        const centerR = startTile.globalRow + Math.floor(layoutH / 2);
+        const centerC = startTile.globalCol + Math.floor(layoutW / 2);
+        const centerKey = `${centerR},${centerC}`;
+        // cellMap still has un-normalized coords, but we already normalized the cells.
+        // We need to search by un-normalized coords. Let's find by matching gr + minR, gc + minC.
+        const found = cells.find(c => (c.gr + minR) === centerR && (c.gc + minC) === centerC);
+        if (found) {
+            hubCellIndex = found.index;
+        } else {
+            // Fallback: first cell with isStart
+            const fallback = cells.find(c => c.isStart);
+            hubCellIndex = fallback ? fallback.index : 0;
+        }
+    }
+
+    // 5. Find the end cell: prefer center of end tile
+    const endTile = placedTiles.find(pt => pt.isEnd);
+    let endCellIndex = cells.length - 1;
+    if (endTile) {
+        const layoutH = endTile.def.layout.length;
+        const layoutW = endTile.def.layout[0].length;
+        const centerR = endTile.globalRow + Math.floor(layoutH / 2);
+        const centerC = endTile.globalCol + Math.floor(layoutW / 2);
+        const found = cells.find(c => (c.gr + minR) === centerR && (c.gc + minC) === centerC);
+        if (found) {
+            endCellIndex = found.index;
+        } else {
+            const fallback = cells.find(c => c.isEnd);
+            endCellIndex = fallback ? fallback.index : cells.length - 1;
+        }
+    }
+
+    // --- 6. Boss (Guarantee placement on END cell only if it's an exit) ---
+    // This assumes 'exit' is the tileType for the end tile that can have a boss.
+    // If the end tile is just a regular room, the boss might not be placed here.
+    const endCell = cells.find(c => c.index === endCellIndex);
+    if (endCell && endCell.tileType === 'exit') { // Assuming 'exit' is the tileType for the end tile
+        endCell.object = 'boss';
+        endCell.objectData = {
+            type: 'boss',
+            theme: endCell.theme, // Use the theme of the end cell
+            level: floorNum * 2 // Use floorNum for level calculation
+        };
+    }
+
+    console.log(`[MapEngine] Floor ${floorNum}: hubCell=${hubCellIndex} at (${cells[hubCellIndex]?.gr},${cells[hubCellIndex]?.gc}), endCell=${endCellIndex} at (${cells[endCellIndex]?.gr},${cells[endCellIndex]?.gc})`);
+
+    return {
+        floor: floorNum,
+        cells,
+        adjacency,
+        gridWidth,
+        gridHeight,
+        hubCellIndex,
+        endCellIndex
+    };
+}
+
+export function getAdjacentCells(floorMap, cellIndex) {
+    return floorMap.adjacency[cellIndex] || [];
+}
+
+// ─── Rendering ───
+
+// Module-level cache of cell DOM elements keyed by cell index
+const cellElements = new Map();
+
+export function renderFloorMap(floorMap, container, theme) {
+    container.innerHTML = '';
+    cellElements.clear();
+
+    // Keep board-container as base class, add board-grid and theme
+    container.className = 'board-container board-grid' + (theme ? ` board-theme-${theme}` : '');
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = `repeat(${floorMap.gridWidth}, 1fr)`;
+    container.style.gridTemplateRows = `repeat(${floorMap.gridHeight}, 1fr)`;
+
+    // Create a physical DOM grid
+    const gridArr = Array.from({ length: floorMap.gridHeight }, () => Array(floorMap.gridWidth).fill(null));
+
+    floorMap.cells.forEach(cell => {
+        if (cell.gr >= 0 && cell.gr < floorMap.gridHeight && cell.gc >= 0 && cell.gc < floorMap.gridWidth) {
+            gridArr[cell.gr][cell.gc] = cell;
+        } else {
+            console.error(`[MapEngine] Cell ${cell.index} out of bounds: gr=${cell.gr}, gc=${cell.gc}, grid=${floorMap.gridWidth}x${floorMap.gridHeight}`);
+        }
+    });
+
+    for (let r = 0; r < floorMap.gridHeight; r++) {
+        for (let c = 0; c < floorMap.gridWidth; c++) {
+            const cell = gridArr[r][c];
+            if (cell) {
+                const el = createCellElement(cell, floorMap.hubCellIndex, floorMap.endCellIndex);
                 container.appendChild(el);
+                cellElements.set(cell.index, el); // Cache direct reference
             } else {
-                // Inner empty cell
                 const spacer = document.createElement('div');
                 spacer.className = 'board-inner-cell';
                 container.appendChild(spacer);
@@ -109,50 +524,59 @@ export function renderBoard(tiles, sideLength, container, theme) {
         }
     }
 
+
+
     const playerToken = document.createElement('div');
     playerToken.className = 'player-token';
     playerToken.id = 'playerToken';
     container.appendChild(playerToken);
+
+    // Post-render verification
+    const hubIdx = floorMap.hubCellIndex;
+    const hubCell = floorMap.cells.find(c => c.index === hubIdx);
+    const hubEl = cellElements.get(hubIdx);
+    const hubById = document.getElementById(`cell-${hubIdx}`);
+    console.log(`[MapEngine] Rendered floor: ${floorMap.gridWidth}x${floorMap.gridHeight} grid, ${floorMap.cells.length} active cells, ${cellElements.size} cached elements`);
+    console.log(`[MapEngine] Hub cell index=${hubIdx}, cell exists=${!!hubCell}, gr=${hubCell?.gr}, gc=${hubCell?.gc}, cached element=${!!hubEl}, getElementById=${!!hubById}`);
+    if (hubCell && !hubEl) {
+        console.error(`[MapEngine] Hub cell ${hubIdx} was NOT rendered! Check if gr/gc is within grid bounds.`);
+    }
 }
 
-function createTileElement(tile) {
+function createCellElement(cell, hubIdx, endIdx) {
     const el = document.createElement('div');
-    el.className = `tile tile-${tile.type}`;
-    el.dataset.index = tile.index;
-    el.id = `tile-${tile.index}`;
-    // Fog of War visibility
-    if (tile.visibility) {
-        el.dataset.visibility = tile.visibility;
+    el.className = `tile tile-${cell.tileType}`;
+    el.dataset.index = cell.index;
+    el.id = `cell-${cell.index}`;
+
+    if (cell.visibility) {
+        el.dataset.visibility = cell.visibility;
     }
 
-    // Index label
-    const indexLabel = document.createElement('span');
-    indexLabel.className = 'tile-index';
-    indexLabel.textContent = tile.index;
-    el.appendChild(indexLabel);
+    if (cell.isStart) el.classList.add('tile-start');
 
-    // Type icon
-    if (tile.type === 'start') {
+    // Show icon ONLY on the specific center hub/end cell indices
+    if (cell.index === hubIdx) {
         const icon = document.createElement('span');
         icon.className = 'tile-type-icon';
         icon.textContent = '🏠';
         el.appendChild(icon);
-    } else if (tile.type === 'corner') {
+    } else if (cell.index === endIdx) {
         const icon = document.createElement('span');
         icon.className = 'tile-type-icon';
-        icon.textContent = '❓';
+        icon.textContent = cell.tileType === 'exit' ? '🚪' : '🪜';
         el.appendChild(icon);
     }
 
-    // Object overlay (restoring upon resume)
+    // Object overlay (monster, chest, event)
     const objEl = document.createElement('span');
     objEl.className = 'tile-object';
-    objEl.id = `tile-obj-${tile.index}`;
+    objEl.id = `cell-obj-${cell.index}`;
 
-    if (tile.object) {
-        const icons = { monster: '💀', chest: '📦', event: '❓' };
-        objEl.textContent = icons[tile.object] || '';
-        el.classList.add(`has-${tile.object}`);
+    if (cell.object) {
+        const icons = { monster: '💀', chest: '📦', event: '❓', boss: '👑' };
+        objEl.textContent = icons[cell.object] || '';
+        el.classList.add(`has-${cell.object}`);
     }
 
     el.appendChild(objEl);
@@ -160,45 +584,49 @@ function createTileElement(tile) {
     return el;
 }
 
-/**
- * Update tile object display.
- */
 export function setTileObject(index, objectType) {
-    const objEl = document.getElementById(`tile-obj-${index}`);
-    const tileEl = document.getElementById(`tile-${index}`);
-    if (!objEl || !tileEl) return;
+    const cellEl = cellElements.get(index) || document.getElementById(`cell-${index}`);
+    if (!cellEl) return;
 
-    tileEl.classList.remove('has-monster', 'has-chest', 'has-event');
+    const objEl = cellEl.querySelector('.tile-object');
+    if (!objEl) return;
+
+    cellEl.classList.remove('has-monster', 'has-chest', 'has-event', 'has-boss');
 
     if (!objectType) {
         objEl.textContent = '';
         return;
     }
 
-    const icons = { monster: '💀', chest: '📦', event: '❓' };
+    const icons = { monster: '💀', chest: '📦', event: '❓', boss: '👑' };
     objEl.textContent = icons[objectType] || '';
-    tileEl.classList.add(`has-${objectType}`);
+    cellEl.classList.add(`has-${objectType}`);
 }
 
-/**
- * Move the player token to a tile with animation.
- */
-export function movePlayerToken(index, sideLength, animate = true) {
+export function movePlayerToken(index, animate = true) {
     const token = document.getElementById('playerToken');
-    const tileEl = document.getElementById(`tile-${index}`);
-    if (!token || !tileEl) return;
+    const cellEl = cellElements.get(index) || document.getElementById(`cell-${index}`);
+
+    if (!token || !cellEl) {
+        console.warn(`[MapEngine] movePlayerToken FAILED: token=${!!token}, cell-${index}=${!!cellEl}, cache size=${cellElements.size}`);
+        // Log all cached keys for debugging
+        console.warn(`[MapEngine] Cached cell indices: [${[...cellElements.keys()].join(', ')}]`);
+        return;
+    }
 
     // Highlight current tile
     document.querySelectorAll('.tile.tile-current').forEach((t) => t.classList.remove('tile-current'));
-    tileEl.classList.add('tile-current');
+    cellEl.classList.add('tile-current');
 
-    // Position the token on top of the tile
-    const board = token.parentElement;
-    const boardRect = board.getBoundingClientRect();
-    const tileRect = tileEl.getBoundingClientRect();
+    // Wait for layout to complete
+    if (cellEl.offsetWidth === 0 || cellEl.offsetHeight === 0) {
+        setTimeout(() => movePlayerToken(index, animate), 50);
+        return;
+    }
 
-    const left = tileRect.left - boardRect.left + tileRect.width / 2;
-    const top = tileRect.top - boardRect.top + tileRect.height / 2;
+    // offsetLeft/offsetTop are relative to offsetParent (board-grid which has position:relative)
+    const left = cellEl.offsetLeft + cellEl.offsetWidth / 2;
+    const top = cellEl.offsetTop + cellEl.offsetHeight / 2;
 
     if (animate) {
         token.style.transition = 'left 0.3s ease, top 0.3s ease';
@@ -208,25 +636,20 @@ export function movePlayerToken(index, sideLength, animate = true) {
 
     token.style.left = `${left}px`;
     token.style.top = `${top}px`;
+
+    console.log(`[MapEngine] Token at cell ${index} -> offset (${left.toFixed(0)}, ${top.toFixed(0)}), cellEl size=${cellEl.offsetWidth}x${cellEl.offsetHeight}`);
 }
 
-/**
- * Set player portrait on the token.
- */
 export function setPlayerPortrait(portrait) {
     const token = document.getElementById('playerToken');
     if (token) token.innerHTML = portrait;
 }
 
-/**
- * Update the visibility state of all tiles on the board.
- * @param {Array<object>} tiles - The updated tiles array from dungeonState
- */
-export function updateBoardVisibility(tiles) {
-    tiles.forEach(tile => {
-        const el = document.getElementById(`tile-${tile.index}`);
+export function updateBoardVisibility(cells) {
+    cells.forEach(cell => {
+        const el = cellElements.get(cell.index) || document.getElementById(`cell-${cell.index}`);
         if (el) {
-            el.dataset.visibility = tile.visibility;
+            el.dataset.visibility = cell.visibility;
         }
     });
 }

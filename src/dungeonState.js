@@ -1,4 +1,4 @@
-﻿// ─── Dungeon State ───
+// ─── Dungeon State ───
 // Manages runtime state during dungeon gameplay (separate from global gameState)
 
 import { setTileObject, movePlayerToken } from './mapEngine.js';
@@ -9,29 +9,26 @@ import { getCombatState } from './combatEngine.js';
 import { updateDungeonStatus } from './gameState.js';
 import { t } from './i18n.js';
 import { getWeightStatus } from './inventory.js';
+import { TILES } from './data/tiles.js';
 
-/** @type {object} */
 let ds = {};
 
-/**
- * Initialize dungeon state for a new dungeon session.
- */
-export function initDungeonState(tiles, mapData, wanderer) {
-    const maxHp = 50 + (wanderer.vit * 5);
+export function initDungeonState(dungeonMap, mapData, wanderer) {
+    const maxHp = 50 + ((wanderer.vit || 0) * 5);
     ds = {
-        tiles: tiles.map(t => ({ ...t, visited: false, visibility: 'shroud' })),
+        dungeonMap,
         mapData,
         wanderer: { ...wanderer },
-        sideLength: SETTINGS.baseMapSize + mapData.mapLv,
-        wave: 1,
+        currentFloorIndex: 0,
         turn: 0,
-        playerPosition: 0,
-        phase: 'spawn', // spawn | move | action
+        playerPosition: dungeonMap.floors[0].hubCellIndex, // index of current cell
+        previousPosition: null, // Track where we came from to prevent backtracking
+        phase: 'spawn', // spawn -> move | action
         currentHp: maxHp,
         maxHp: maxHp,
         sanity: SETTINGS.initialSanity,
         maxSanity: SETTINGS.maxSanity,
-        statusEffects: [],  // { type, duration, icon, label }
+        statusEffects: [],
         exp: wanderer.exp || 0,
         level: wanderer.level || 1,
         expToNext: SETTINGS.expTable[(wanderer.level || 1) - 1] || SETTINGS.expTable[SETTINGS.expTable.length - 1],
@@ -43,32 +40,59 @@ export function initDungeonState(tiles, mapData, wanderer) {
         updateCallback: null,
     };
 
-    // Initial visibility
-    updateVisibility();
-
+    enterCurrentFloor();
     return ds;
 }
 
 export function loadDungeonState(savedDs) {
     ds = savedDs;
-    // Functions are stripped by JSON serialization, so we explicitly null them
-    // The scene will re-assign them
     ds.logCallback = null;
     ds.updateCallback = null;
+
+    if (ds.dungeonMap && ds.dungeonMap.floors) {
+        ds.dungeonMap.floors.forEach(floor => {
+            // If adjacency is completely missing, or it's an empty object (lost Map data), recalculate it
+            if (!floor.adjacency || (typeof floor.adjacency === 'object' && Object.keys(floor.adjacency).length === 0)) {
+                floor.adjacency = {};
+                
+                const cellMap = new Map();
+                floor.cells.forEach(c => cellMap.set(`${c.gr},${c.gc}`, c));
+
+                floor.cells.forEach(cell => {
+                    const neighbors = [];
+                    const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                    dirs.forEach(d => {
+                        const nr = cell.gr + d[0];
+                        const nc = cell.gc + d[1];
+                        const ncell = cellMap.get(`${nr},${nc}`);
+                        if (ncell) {
+                            neighbors.push(ncell.index);
+                        }
+                    });
+                    floor.adjacency[cell.index] = neighbors;
+                });
+                console.log(`[DungeonState] Recalculated missing adjacency for floor ${floor.floor}`);
+            } else if (floor.adjacency instanceof Map) {
+                // If it IS a Map somehow, convert it to plain object for future safety
+                const newObj = {};
+                for (const [k, v] of floor.adjacency.entries()) {
+                    newObj[k] = v;
+                }
+                floor.adjacency = newObj;
+            }
+        });
+    }
+
+    if (ds.previousPosition === undefined) {
+        ds.previousPosition = null;
+    }
+
     return ds;
 }
 
-export function getDungeonState() {
-    return ds;
-}
-
-export function setLogCallback(cb) {
-    ds.logCallback = cb;
-}
-
-export function setUpdateCallback(cb) {
-    ds.updateCallback = cb;
-}
+export function getDungeonState() { return ds; }
+export function setLogCallback(cb) { ds.logCallback = cb; }
+export function setUpdateCallback(cb) { ds.updateCallback = cb; }
 
 function log(msg) {
     if (ds.logCallback) ds.logCallback(msg);
@@ -77,22 +101,275 @@ function log(msg) {
 export function triggerUpdate() {
     const inv = getInventory();
     if (inv) {
-        ds.inventory = {
-            slots: inv.slots,
-            safeBag: inv.safeBag,
-            equipped: inv.equipped
-        };
+        ds.inventory = { slots: inv.slots, safeBag: inv.safeBag, equipped: inv.equipped };
     }
-
     const combat = getCombatState();
     if (combat && combat.result === null) {
         ds.combat = combat;
     } else {
         ds.combat = null;
     }
-
     if (ds.updateCallback) ds.updateCallback(ds);
     setActiveDungeon(ds);
+}
+
+// ─── Spawn & Floor Entry ───
+export function enterCurrentFloor() {
+    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
+    log(`[시스템] ${floorMap.floor}층에 진입했습니다.`);
+
+    floorMap.cells.forEach(cell => {
+        if (cell.object) return;
+        
+        if (cell.isEnd && cell.tileType === 'exit') {
+            const def = TILES[cell.tileDefId];
+            if (def && def.boss) {
+                cell.object = 'boss';
+                cell.objectData = { monsterId: def.boss };
+                setTileObject(cell.index, 'boss');
+            }
+            return;
+        }
+
+        const def = TILES[cell.tileDefId];
+        if (!def) return;
+
+        // Simple random roll for each cell in the tile (lazy evaluation: roll for every cell based on tile constraints)
+        // A robust engine would count exactly to the bounds.
+        if (def.mobSpawn && def.mobSpawn.pool && def.mobSpawn.pool.length > 0) {
+            if (Math.random() < 0.2) { // 20% chance per cell in mob tiles
+                cell.object = 'monster';
+                cell.objectData = { monsterId: def.mobSpawn.pool[Math.floor(Math.random() * def.mobSpawn.pool.length)] };
+                setTileObject(cell.index, 'monster');
+                return;
+            }
+        }
+        if (def.eventSpawn && def.eventSpawn.maxCount > 0) {
+            if (Math.random() < 0.1) { // 10% chance per cell in event tiles
+                cell.object = 'event';
+                cell.objectData = null;
+                setTileObject(cell.index, 'event');
+                return;
+            }
+        }
+    });
+
+    // Start at the designated hub cell for the new floor
+    ds.playerPosition = floorMap.hubCellIndex;
+    ds.previousPosition = null; // Clear path memory so player can freely move anywhere
+    
+    updateVisibility();
+    ds.phase = 'move';
+    triggerUpdate();
+}
+
+
+// ─── Dice ───
+export function rollDice(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// ─── Visibility (BFS) ───
+export function updateVisibility() {
+    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
+    const hasTorch = hasStatusEffect('torch_buff');
+    const viewRange = SETTINGS.baseViewDistance + (hasTorch ? SETTINGS.torchViewBonus : 0);
+
+    floorMap.cells.forEach(c => {
+        if (c.visibility === 'visible') c.visibility = 'fog';
+    });
+
+    const q = [[ds.playerPosition, 0]];
+    const visited = new Set([ds.playerPosition]);
+
+    while(q.length > 0) {
+        const [curr, dist] = q.shift();
+        const cell = floorMap.cells.find(c => c.index === curr);
+        if (cell) {
+            cell.visibility = 'visible';
+            cell.visited = true;
+        }
+        
+        if (dist < viewRange) {
+            const adj = floorMap.adjacency[curr] || [];
+            adj.forEach(a => {
+                if (!visited.has(a)) {
+                    visited.add(a);
+                    q.push([a, dist + 1]);
+                }
+            });
+        }
+    }
+    triggerUpdate();
+}
+
+// ─── Movement ───
+export function executeMovePhase() {
+    ds.phase = 'move';
+    const weightStatus = getWeightStatus(ds.wanderer?.str || 0);
+    const rawRoll = rollDice(1, SETTINGS.moveDiceSides);
+    const dicePenalty = weightStatus.dicePenalty || 0;
+    const roll = Math.max(1, rawRoll + dicePenalty);
+    ds.turn++;
+    
+    if (!hasStatusEffect('torch_buff')) {
+        const reduced = reduceSanity(SETTINGS.sanityCostPerMove);
+        log(t('logs.move_dice_sanity', { roll, cost: reduced }));
+    } else {
+        log(t('logs.move_dice_torch', { roll }));
+    }
+
+    return {
+        roll,
+        rawRoll,
+        dicePenalty,
+        weightIcon: weightStatus.icon,
+        stepsRemaining: roll,
+        path: []
+    };
+}
+
+export function processMovementSteps(stepsRemaining, currentPath, chosenNextCell = null) {
+    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
+    let pos = ds.playerPosition;
+    let pathSegment = [];
+    let stoppedForChoice = false;
+    let availableChoices = [];
+    let stoppedForEvent = false;
+
+    // To prevent backtracking, we track the cell we just came from.
+    // If we have a currentPath from a multi-step move, we came from currentPath's last element.
+    // Otherwise, we use the persistently stored ds.previousPosition.
+    let prevPos = ds.previousPosition;
+    if (currentPath.length > 0) {
+        prevPos = currentPath[currentPath.length - 1];
+    }
+
+    while(stepsRemaining > 0) {
+        const adj = floorMap.adjacency[pos] || [];
+        let options = adj;
+        
+        // Filter out the position we just came from
+        if (prevPos !== null) {
+            options = adj.filter(x => x !== prevPos);
+        }
+
+        if (chosenNextCell !== null) {
+            options = [chosenNextCell];
+            // Clear chosen cell after applying it
+            chosenNextCell = null;
+        }
+
+        // If there are literally no options, we must be at a dead end
+        if (options.length === 0) {
+             // If we hit a dead end, clear previousPosition so we can turn around on the NEXT turn,
+             // but current movement stops.
+             ds.previousPosition = null;
+             stepsRemaining = 0;
+             break;
+        }
+
+        if (options.length > 1) {
+            stoppedForChoice = true;
+            availableChoices = options;
+            break;
+        }
+
+        // Move to the only option
+        prevPos = pos; // update where we came from
+        pos = options[0]; // move to new position
+        pathSegment.push(pos);
+        stepsRemaining--;
+
+        const cell = floorMap.cells.find(c => c.index === pos);
+        // Stop movement completely only if it's a hard exit/stairs (boss)
+        if (cell.isEnd) {
+             stoppedForEvent = true;
+             break;
+        }
+    }
+
+    if (pathSegment.length > 0) {
+        // The cell BEFORE the final position in this path segment is where we came from
+        if (pathSegment.length > 1) {
+            ds.previousPosition = pathSegment[pathSegment.length - 2];
+        } else {
+            // If segment length is exactly 1, we came from our initial position
+            ds.previousPosition = ds.playerPosition;
+        }
+        ds.playerPosition = pathSegment[pathSegment.length - 1];
+    }
+
+    ds.playerPosition = pos;
+    updateVisibility();
+
+    if (stepsRemaining === 0 && !stoppedForChoice) {
+        ds.phase = 'action';
+    }
+
+    return {
+        pathSegment,
+        stepsRemaining,
+        stoppedForChoice,
+        availableChoices,
+        finalPosition: pos,
+        stoppedForEvent
+    };
+}
+
+export function moveToNextFloor() {
+    if (ds.currentFloorIndex < ds.dungeonMap.floors.length - 1) {
+        ds.currentFloorIndex++;
+        enterCurrentFloor();
+    }
+}
+
+// ─── Tile Interaction ───
+export function handleTileInteraction() {
+    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
+    const cell = floorMap.cells.find(c => c.index === ds.playerPosition);
+
+    if (cell.isStart && ds.turn > 0) {
+        return { type: 'start', data: null };
+    }
+
+    if (cell.isEnd) {
+        if (cell.tileType === 'exit') {
+            if (cell.object === 'boss') {
+                log(`[보스 등장] 출구를 막고 있는 보스와 전투를 해야합니다.`);
+                return { type: 'monster', data: cell.objectData };
+            } else {
+                return { type: 'exit_cleared', data: null }; // Boss defeated
+            }
+        } else if (cell.tileType === 'stairs') {
+            return { type: 'stairs', data: null };
+        }
+    }
+
+    if (cell.object === 'monster') {
+        const nameKey = cell.objectData?.monsterId ? `monsters.${cell.objectData.monsterId}.name` : null;
+        log(t('logs.combat_encounter', { name: cell.objectData?.monsterId || 'unknown', level: 1 }));
+        return { type: 'monster', data: cell.objectData };
+    }
+
+    if (cell.object === 'chest') {
+        log(t('logs.chest_found'));
+        cell.object = null;
+        cell.objectData = null;
+        setTileObject(cell.index, null);
+        return { type: 'chest', data: null };
+    }
+
+    if (cell.object === 'event') {
+        log(t('logs.event_found'));
+        cell.object = null;
+        cell.objectData = null;
+        setTileObject(cell.index, null);
+        return { type: 'event', data: null };
+    }
+
+    log(t('logs.empty_tile'));
+    return { type: 'empty', data: null };
 }
 
 // ─── EXP / Level ───
@@ -333,291 +610,6 @@ export function tickStatusEffects() {
     }
 }
 
-// ─── Visibility (Fog of War) ───
-
-export function updateVisibility() {
-    const { playerPosition, tiles, sideLength } = ds;
-    const hasTorch = hasStatusEffect('torch_buff');
-    const viewRange = SETTINGS.baseViewDistance + (hasTorch ? SETTINGS.torchViewBonus : 0);
-
-    // Calculate visible range based on map loop logic
-    const totalTiles = tiles.length;
-
-    // Reset visible to fog for previously visible tiles
-    tiles.forEach(t => {
-        if (t.visibility === 'visible') t.visibility = 'fog';
-    });
-
-    // Mark current range as visible
-    for (let i = -viewRange; i <= viewRange; i++) {
-        let idx = (playerPosition + i) % totalTiles;
-        if (idx < 0) idx += totalTiles;
-
-        tiles[idx].visibility = 'visible';
-        tiles[idx].visited = true;
-    }
-
-    triggerUpdate();
-}
-
-// ─── Dice ───
-
-export function rollDice(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// ─── Spawn Phase ───
-
-/**
- * Roll the 3 spawn dice. Returns the roll values without placing anything.
- */
-export function rollSpawnDice() {
-    const dice = ds.mapData.dice;
-    const monsterRoll = rollDice(dice.monster[0], dice.monster[1]);
-    const treasureRoll = rollDice(dice.treasure[0], dice.treasure[1]);
-    const eventRoll = rollDice(dice.event[0], dice.event[1]);
-    return { monsterRoll, treasureRoll, eventRoll };
-}
-
-/**
- * Generate a list of spawn placements from dice results, without applying them.
- * Returns an ordered array of { tileIndex, type, objectData? } items.
- */
-export function getSpawnPlacements(rolls) {
-    const placements = [];
-
-    const getEmptyTiles = () =>
-        ds.tiles
-            .filter((t) => t.type === 'empty' && t.object === null)
-            .map((t) => t.index);
-
-    // Track tiles we've already planned to use (so no duplicates within a batch)
-    const claimed = new Set();
-
-    function pickTile() {
-        const available = getEmptyTiles().filter((i) => !claimed.has(i));
-        if (available.length === 0) return null;
-        const idx = available[Math.floor(Math.random() * available.length)];
-        claimed.add(idx);
-        return idx;
-    }
-
-    for (let i = 0; i < rolls.monsterRoll; i++) {
-        const idx = pickTile();
-        if (idx === null) break;
-        placements.push({
-            tileIndex: idx,
-            type: 'monster',
-            objectData: {
-                monsterId: ds.mapData.monsterPool[Math.floor(Math.random() * ds.mapData.monsterPool.length)],
-                level: ds.wave,
-            },
-        });
-    }
-
-    for (let i = 0; i < rolls.treasureRoll; i++) {
-        const idx = pickTile();
-        if (idx === null) break;
-        placements.push({ tileIndex: idx, type: 'chest' });
-    }
-
-    for (let i = 0; i < rolls.eventRoll; i++) {
-        const idx = pickTile();
-        if (idx === null) break;
-        placements.push({ tileIndex: idx, type: 'event' });
-    }
-
-    return placements;
-}
-
-/**
- * Commit a single spawn placement to the tile state + DOM.
- */
-export function commitSpawn(placement) {
-    const tile = ds.tiles[placement.tileIndex];
-    tile.object = placement.type;
-    tile.objectData = placement.objectData || null;
-    setTileObject(placement.tileIndex, placement.type);
-}
-
-/**
- * Shorthand: execute the entire spawn phase at once (for advanceWave etc.).
- */
-export function executeSpawnPhase() {
-    const rolls = rollSpawnDice();
-    log(t('logs.spawn_dice', { monster: rolls.monsterRoll, treasure: rolls.treasureRoll, event: rolls.eventRoll }));
-    const placements = getSpawnPlacements(rolls);
-    placements.forEach((p) => commitSpawn(p));
-    ds.phase = 'move';
-    triggerUpdate();
-    return rolls;
-}
-
-// ─── Movement ───
-
-/**
- * Roll the movement dice (1d6) and move the player.
- * Returns { roll, steps, stoppedAtStart, finalTile }
- */
-export function executeMovePhase() {
-    // Roll 1d6 raw, then apply weight penalty (min 1)
-    const weightStatus = getWeightStatus(ds.wanderer?.str || 0);
-    const rawRoll = rollDice(1, SETTINGS.moveDiceSides); // always 1d6
-    const dicePenalty = weightStatus.dicePenalty || 0;    // 0, -1, or -3
-    const roll = Math.max(1, rawRoll + dicePenalty);
-    ds.turn++;
-
-    // Sanity drops by cost per move (unless torch buff active)
-    if (!hasStatusEffect('torch_buff')) {
-        const reduced = reduceSanity(SETTINGS.sanityCostPerMove);
-        log(t('logs.move_dice_sanity', { roll, cost: reduced }));
-    } else {
-        log(t('logs.move_dice_torch', { roll }));
-    }
-
-    const totalTiles = ds.tiles.length;
-    let stepsRemaining = roll;
-    let currentPos = ds.playerPosition;
-    let stoppedAtStart = false;
-    const path = [];
-
-    while (stepsRemaining > 0) {
-        currentPos = (currentPos + 1) % totalTiles;
-        stepsRemaining--;
-        path.push(currentPos);
-
-        // Forced stop at start tile
-        if (currentPos === 0 && stepsRemaining > 0) {
-            stoppedAtStart = true;
-            log(t('logs.force_stop_start', { remaining: stepsRemaining }));
-            stepsRemaining = 0;
-        }
-    }
-
-    ds.playerPosition = currentPos;
-    ds.phase = 'action';
-
-    const result = {
-        roll,
-        rawRoll,
-        penaltyApplied: dicePenalty,
-        weightIcon: weightStatus.icon,
-        weightTier: weightStatus.tier,
-        path,
-        stoppedAtStart,
-        finalPosition: currentPos,
-        finalTile: ds.tiles[currentPos],
-    };
-
-    return result;
-}
-
-/**
- * Animate player movement along a path of tile indices.
- * Returns a promise that resolves when animation completes.
- */
-export function animateMovement(path, sideLength) {
-    return new Promise((resolve) => {
-        let i = 0;
-        function step() {
-            if (i >= path.length) {
-                resolve();
-                return;
-            }
-            movePlayerToken(path[i], sideLength, true);
-
-            // Heal HP per step (from settings)
-            if (ds.currentHp < ds.maxHp) {
-                ds.currentHp = Math.min(ds.maxHp, ds.currentHp + SETTINGS.hpRegenPerTile);
-                triggerUpdate(); // Refresh HUD
-            }
-
-            i++;
-            setTimeout(step, 350);
-        }
-        step();
-    });
-}
-
-// ─── Tile Interaction ───
-
-/**
- * Handle interaction when landing on a tile.
- * Returns { type, data } describing what happened.
- */
-export function handleTileInteraction() {
-    const tile = ds.tiles[ds.playerPosition];
-
-    if (tile.type === 'start' || ds.playerPosition === 0) {
-        // Check wave advancement
-        if (ds.turn > 0) {
-            return { type: 'start', data: null };
-        }
-    }
-
-    if (tile.type === 'corner') {
-        // Do not log the placeholder event_corner message anymore.
-        // We will process this as a boosted random event in dungeonScene.js
-        return { type: 'corner_event', data: null };
-    }
-
-    if (tile.object === 'monster') {
-        const nameKey = tile.objectData?.monsterId ? `monsters.${tile.objectData.monsterId}.name` : null;
-        const name = nameKey ? t(nameKey) : tile.objectData?.monsterId || 'unknown';
-        log(t('logs.combat_encounter', { name, level: tile.objectData?.level || 1 }));
-        return { type: 'monster', data: tile.objectData };
-    }
-
-    if (tile.object === 'chest') {
-        log(t('logs.chest_found'));
-        // Clear the chest
-        tile.object = null;
-        tile.objectData = null;
-        setTileObject(tile.index, null);
-        return { type: 'chest', data: null };
-    }
-
-    if (tile.object === 'event') {
-        log(t('logs.event_found'));
-        tile.object = null;
-        tile.objectData = null;
-        setTileObject(tile.index, null);
-        return { type: 'event', data: null };
-    }
-
-    log(t('logs.empty_tile'));
-    return { type: 'empty', data: null };
-}
-
-// ─── Wave ───
-
-/**
- * Advance to the next wave. Level up monsters, shuffle, respawn.
- */
-export function advanceWave() {
-    ds.wave++;
-    log(`\n═══ ${t('logs.wave_start', { wave: ds.wave })} ═══`);
-
-    // Clear existing non-monster objects (chests/events)
-    ds.tiles.forEach((tile) => {
-        if (tile.object === 'chest' || tile.object === 'event') {
-            tile.object = null;
-            tile.objectData = null;
-            setTileObject(tile.index, null);
-        }
-    });
-
-    // Level up existing monsters
-    ds.tiles.forEach((tile) => {
-        if (tile.object === 'monster' && tile.objectData) {
-            tile.objectData.level = ds.wave;
-        }
-    });
-
-    log(t('logs.monster_level_up', { wave: ds.wave }));
-
-    triggerUpdate();
-}
 
 // ─── Sanity helpers ───
 

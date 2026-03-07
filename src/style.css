@@ -2224,7 +2224,7 @@ button {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  overflow: hidden;
+  overflow: auto;
   /* Ensure board stays within */
 }
 
@@ -2397,22 +2397,26 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: auto;
 }
 
-.board-grid {
+.board-container.board-grid {
   display: grid;
   gap: 3px;
-  width: 100%;
+  width: fit-content;
+  height: fit-content;
   max-width: 560px;
-  aspect-ratio: 1;
+  max-height: 100%;
   position: relative;
   padding: 4px;
+  margin: auto;
 }
 
 /* Inner (empty) cells */
 .board-inner-cell {
   background: rgba(10, 10, 15, 0.6);
   border-radius: 4px;
+  aspect-ratio: 1;
 }
 
 /* ─── Tiles ─── */
@@ -2425,6 +2429,7 @@ button {
   align-items: center;
   justify-content: center;
   min-height: 0;
+  aspect-ratio: 1;
   cursor: default;
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
   overflow: hidden;
@@ -6069,4 +6074,58 @@ button {
   font-size: 0.78rem;
   line-height: 1.4;
   margin-bottom: 4px;
+}
+
+/* ─── D-Pad for Direction Choices ─── */
+.d-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 8px;
+  width: fit-content;
+  margin: 15px auto 0;
+}
+
+.d-pad-cell {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.d-pad-cell.empty {
+  visibility: hidden;
+}
+
+.d-pad-cell.center {
+  position: relative;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.d-pad-cell.center::after {
+  content: '🎯';
+  font-size: 1.5rem;
+  opacity: 0.3;
+}
+
+.d-pad-cell .direction-btn {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: bold;
+  border-radius: 8px;
+  border: 1.5px solid var(--border-glow);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.d-pad-cell .direction-btn:active {
+  transform: scale(0.92);
 }

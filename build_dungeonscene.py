@@ -1,9 +1,16 @@
-// ─── Dungeon Scene (던전씬) — Phase 4: Data Layer Integration ───
+import re
+
+with open('c:/Work/round-the-dungeon/src/scenes/dungeonScene.js', 'r', encoding='utf-8') as f:
+    text = f.read()
+
+# We'll just define the entire content here because rewriting it piecewise is too error prone given the structural changes.
+
+new_content = """// ─── Dungeon Scene (던전씬) — Phase 4: Data Layer Integration ───
 import { changeScene } from '../sceneManager.js';
-import { renderFloorMap, movePlayerToken, setPlayerPortrait, setTileObject, updateBoardVisibility } from '../mapEngine.js';
+import { renderFloorMap, movePlayerToken, setPlayerPortrait, setTileObject } from '../mapEngine.js';
 import {
   initDungeonState, getDungeonState, setLogCallback, setUpdateCallback,
-  executeMovePhase, processMovementSteps, enterCurrentFloor, moveToNextFloor,
+  executeMovePhase, processMovementSteps, moveToNextFloor, enterCurrentFloor,
   handleTileInteraction, getSanityStatus, loadDungeonState, reduceSanity,
   tickStatusEffects, triggerUpdate
 } from '../dungeonState.js';
@@ -41,8 +48,6 @@ export function mount(container, params = {}) {
       prepInv = saved.inventory.slots;
       prepSafeBag = saved.inventory.safeBag;
     }
-    
-    renderScene(container, map, wanderer, ds, resume, prepInv, prepSafeBag);
   } else {
     // Generate full dungeon map first (dungeonMap graph)
     import('../mapEngine.js').then(({ buildDungeonMap }) => {
@@ -56,7 +61,10 @@ export function mount(container, params = {}) {
       
       renderScene(container, map, wanderer, ds, resume, prepInv, prepSafeBag);
     });
+    return; // Wait for initial build
   }
+
+  renderScene(container, map, wanderer, ds, resume, prepInv, prepSafeBag);
 }
 
 function renderScene(container, map, wanderer, ds, resume, prepInv, prepSafeBag) {
@@ -175,7 +183,7 @@ function renderScene(container, map, wanderer, ds, resume, prepInv, prepSafeBag)
           showMoveUI();
         });
       } else {
-        if (!resume) await showFloorTitle(floorNum);
+        await showFloorTitle(floorNum);
         showMoveUI();
       }
     })();
@@ -192,7 +200,7 @@ function addLog(msg) {
   if (logEl) {
     const p = document.createElement('p');
     p.className = 'log-entry log-new';
-    p.textContent = `> ${msg}`;
+    p.textContent = msg;
     logEl.appendChild(p);
     logEl.scrollTop = logEl.scrollHeight;
   } else {
@@ -209,41 +217,46 @@ function refreshTopbar(state) {
   }
   const turnEl = document.getElementById('topTurn');
   if (turnEl) turnEl.textContent = `${t('dungeon_ui.turn', '턴')} ${state.turn}`;
-  refreshCurrencyDisplay();
 }
 
 async function showFloorTitle(floorNum) {
-  const container = document.querySelector('.dungeon-scene');
-  if (!container) return;
-
-  playSFX('waveStart');
-
+  const ds = getDungeonState();
   const titleHtml = `
     <div class="wave-title-overlay" id="waveTitleOverlay">
         <h1 class="wave-text glitch" data-text="${floorNum} F">${floorNum} F</h1>
     </div>
   `;
-  container.insertAdjacentHTML('beforeend', titleHtml);
+  document.body.insertAdjacentHTML('beforeend', titleHtml);
+  playSFX('startWave');
   await delay(1500);
   const el = document.getElementById('waveTitleOverlay');
   if (el) el.remove();
 }
 
-function showDicePopup(val, penalty = 0, isPenalized = false) {
+function showDicePopup(val, penalty = 0, withBadge = false) {
+  const old = document.getElementById('dicePopupOverlay');
+  if (old) old.remove();
+
   const board = document.getElementById('boardContainer');
   if (!board) return;
 
-  const popup = document.createElement('div');
-  popup.className = 'dice-popup' + (isPenalized ? ' dice-popup-penalized' : '');
-  if (isPenalized && penalty < 0) {
-    popup.innerHTML = `${val} <span class="dice-penalty-badge">${penalty}</span>`;
-  } else {
-    popup.textContent = val;
+  const overlay = document.createElement('div');
+  overlay.id = 'dicePopupOverlay';
+  overlay.className = 'dice-popup-overlay';
+
+  let html = `<div class="dice-popup-content"><span class="dice-popup-icon">🎲</span><span class="dice-popup-val">${val}</span>`;
+  if (penalty < 0 && withBadge) {
+    html += `<div class="dice-penalty-badge">${penalty}</div>`;
   }
-  board.querySelectorAll('.dice-popup').forEach(p => p.remove());
-  board.appendChild(popup);
-  const duration = isPenalized ? 1400 : 1000;
-  setTimeout(() => popup.remove(), duration);
+  html += `</div>`;
+  overlay.innerHTML = html;
+
+  board.appendChild(overlay);
+
+  setTimeout(() => {
+    overlay.classList.add('fade-out-up');
+    setTimeout(() => overlay.remove(), 400);
+  }, 600);
 }
 
 // ─── Game Flow ───
@@ -286,30 +299,36 @@ async function handleRollMove() {
 
 async function executeMovementSteps(stepsRemaining, chosenNextCell = null) {
   const ds = getDungeonState();
+  
   const moveRes = processMovementSteps(stepsRemaining, [], chosenNextCell);
   
+  // Animate the path segment
   if (moveRes.pathSegment.length > 0) {
     for (const pos of moveRes.pathSegment) {
       movePlayerToken(pos, true);
+      // Heal HP per step
       if (ds.currentHp < ds.maxHp) {
-        ds.currentHp = Math.min(ds.maxHp, ds.currentHp + 1);
+        ds.currentHp = Math.min(ds.maxHp, ds.currentHp + 1); // fixed 1 hp per tile
         refreshHUD(ds);
       }
       await delay(350);
     }
   }
 
+  // Update logic after this segment
   tickStatusEffects();
   refreshTopbar(ds);
   refreshHUD(ds);
   if (ds.currentHp <= 0) { showGameOver(); return; }
 
   if (moveRes.stoppedForChoice) {
+      // Need player direction selection
       showDirectionChoiceUI(moveRes.availableChoices, moveRes.stepsRemaining);
       return;
   }
 
   if (moveRes.stepsRemaining === 0 || moveRes.stoppedForEvent) {
+      // Finished moving organically or hit an event
       await resolveTileInteraction();
   }
 }
@@ -323,56 +342,38 @@ function showDirectionChoiceUI(choices, stepsRemaining) {
     <div class="move-phase fade-in">
         <p>갈림길에 도착했습니다. 방향을 선택하세요.</p>
         <p>잔여 이동 수: ${stepsRemaining}</p>
-        <div class="direction-choices d-pad">
+        <div class="direction-choices">
     `;
 
+    // Try to map adjacency to logical directions
     const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
     const currCell = floorMap.cells.find(c => c.index === ds.playerPosition);
 
-    let btnUp = '', btnDown = '', btnLeft = '', btnRight = '';
-
     choices.forEach(cellIdx => {
         const nextCell = floorMap.cells.find(c => c.index === cellIdx);
+        let dirLabel = '이동';
+        if (nextCell.gr < currCell.gr) dirLabel = '위로';
+        if (nextCell.gr > currCell.gr) dirLabel = '아래로';
+        if (nextCell.gc < currCell.gc) dirLabel = '왼쪽으로';
+        if (nextCell.gc > currCell.gc) dirLabel = '오른쪽으로';
         
-        // Prevent going back to the immediate previous position
-        if (cellIdx === ds.previousPosition && choices.length > 1) {
-            return; // Skip rendering this button so they can't go backwards
-        }
-
-        const btnHtml = `<button class="btn-action direction-btn" data-target="${cellIdx}">`;
-        
-        if (nextCell.gr < currCell.gr) btnUp = btnHtml + '위로</button>';
-        else if (nextCell.gr > currCell.gr) btnDown = btnHtml + '아래로</button>';
-        else if (nextCell.gc < currCell.gc) btnLeft = btnHtml + '왼쪽으로</button>';
-        else if (nextCell.gc > currCell.gc) btnRight = btnHtml + '오른쪽으로</button>';
+        html += `<button class="btn-action direction-btn" data-target="${cellIdx}">${dirLabel}</button>`;
     });
 
-    html += `
-        <div class="d-pad-cell empty"></div>
-        <div class="d-pad-cell">${btnUp}</div>
-        <div class="d-pad-cell empty"></div>
-        
-        <div class="d-pad-cell">${btnLeft}</div>
-        <div class="d-pad-cell center"></div>
-        <div class="d-pad-cell">${btnRight}</div>
-        
-        <div class="d-pad-cell empty"></div>
-        <div class="d-pad-cell">${btnDown}</div>
-        <div class="d-pad-cell empty"></div>
-    </div></div>`;
+    html += `</div></div>`;
     actionEl.innerHTML = html;
 
     document.querySelectorAll('.direction-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const tgt = parseInt(e.target.dataset.target, 10);
-            executeMovementSteps(stepsRemaining, tgt);
+            executeMovementSteps(stepsRemaining, tgt); // Continue with chosen
         });
     });
 }
 
 async function resolveTileInteraction() {
   const ds = getDungeonState();
-  const interaction = handleTileInteraction();
+  const interaction = handleTileInteraction(); // Returns { type, data }
 
   if (interaction.type === 'exit_cleared') {
       addLog(`출구가 열렸습니다! 던전 클리어!`);
@@ -387,7 +388,7 @@ async function resolveTileInteraction() {
       const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
       const boardContainer = document.getElementById('boardContainer');
       renderFloorMap(floorMap, boardContainer, ds.mapData.theme);
-      movePlayerToken(ds.playerPosition, false);
+      movePlayerToken(ds.playerPosition, false); // jump to start
       await showFloorTitle(floorMap.floor);
       showMoveUI();
       return;
@@ -395,6 +396,7 @@ async function resolveTileInteraction() {
 
   if (interaction.type === 'monster') {
     const monsterId = interaction.data?.monsterId;
+    // Map wave logic is gone, use floor index as base level + 1
     const monsterLevel = (interaction.data?.level) || (ds.currentFloorIndex + 1);
     const monsterInstance = getMonster(monsterId, monsterLevel);
 
@@ -449,15 +451,14 @@ async function resolveTileInteraction() {
 
     if (evt.type === 'immediate') {
       const outcomes = evt.outcomes || [];
-      if (outcomes.length > 0) {
-          const total = outcomes.reduce((a, o) => a + o.weight, 0);
-          let r = Math.random() * total;
-          let picked = outcomes[outcomes.length - 1];
-          for (const o of outcomes) { r -= o.weight; if (r <= 0) { picked = o; break; } }
-          const died = applyOutcome(picked, addLog, refreshHUD, refreshInlineInventory);
-          updateDungeonStatus(ds);
-          if (died) { showGameOver(); return; }
-      }
+      const total = outcomes.reduce((a, o) => a + o.weight, 0);
+      let r = Math.random() * total;
+      let picked = outcomes[outcomes.length - 1];
+      for (const o of outcomes) { r -= o.weight; if (r <= 0) { picked = o; break; } }
+      const died = applyOutcome(picked, addLog, refreshHUD, refreshInlineInventory);
+      updateDungeonStatus(ds);
+
+      if (died) { showGameOver(); return; }
       await delay(800);
       showMoveUI();
     } else {
@@ -475,13 +476,14 @@ async function resolveTileInteraction() {
     return;
   }
 
+  // empty or completed start turn
   showMoveUI();
 }
 
 async function launchRandomCombat() {
   const ds = getDungeonState();
-  const pool = [1001, 2001, 3001, 4001, 9001];
-  const monsterId = pool[Math.floor(Math.random() * pool.length)];
+  const pool = ['m_slime'];
+  const monsterId = pool[0];
   const monsterInstance = getMonster(monsterId, ds.currentFloorIndex + 1);
   initCombat(ds.wanderer, monsterInstance);
   await showCombat(monsterInstance, createCombatCallbacks(monsterInstance));
@@ -548,11 +550,12 @@ function createCombatCallbacks(monsterInstance) {
 function showGameOver() {
   const actionEl = document.getElementById('actionContent');
   if (!actionEl) return;
-  const ds = getDungeonState();
-  const wId = ds.wanderer.id;
+  
+  // Actually handle death (kill wanderer in state)
+  const wId = getDungeonState().wanderer.id;
   import('../gameState.js').then(module => {
       module.handleWandererDeath(wId);
-      module.clearActiveDungeon();
+      clearActiveDungeon();
   });
 
   playSFX('gameOver');
@@ -579,9 +582,12 @@ function showDungeonClear() {
       const gw = gs.recruitedWanderers.find(w => w.id === ds.wanderer.id);
       if (gw) {
           gw.status = 'idle';
-          gw.currentHp = ds.wanderer.vit * 5 + 50; 
+          gw.currentHp = ds.wanderer.vit * 5 + 50; // simple heal on return
       }
+      
+      // Transfer loot safe bag -> town storage
       inv.safeBag.forEach(it => module.addItemToStorage(it));
+      
       module.progressTownLevel(ds.mapData.mapLv);
       module.clearActiveDungeon();
   });
@@ -599,93 +605,77 @@ function showDungeonClear() {
   });
 }
 
-function renderHUD(ds) {
-  const w = ds.wanderer;
-  if (!w) return `<p>${t('dungeon_ui.no_info')}</p>`;
-  
-  // Create an explicit wrapper matching the original structure so existing CSS fits.
-  let html = `
-    <div class="hud-header">
-      <div class="hud-portrait">${w.portrait}</div>
-      <div class="hud-name">${w.nameKey ? t(w.nameKey) : w.name}</div>
-      <div class="hud-class">${w.classKey ? t(w.classKey) : w.className || '방랑자'}</div>
-    </div>
-  `;
+function renderHUD(state) {
+  const w = state.wanderer;
+  const hpStr = `${state.currentHp}/${state.maxHp}`;
+  const hpPct = Math.max(0, Math.min(100, (state.currentHp / state.maxHp) * 100));
 
-  const hpPercent = Math.max(0, Math.min(100, (ds.currentHp / ds.maxHp) * 100));
-  const sanityPercent = Math.max(0, Math.min(100, (ds.sanity / ds.maxSanity) * 100));
-  const expPercent = Math.max(0, Math.min(100, (ds.exp / ds.expToNext) * 100));
+  const sanityStatus = getSanityStatus(state.sanity);
+  const isDanger = state.sanity <= 20;
 
-  html += `
-    <div class="hud-bar-group">
-      <label class="hud-bar-label">${t('dungeon_ui.hp')}</label>
-      <div class="hud-bar hp-bar"><div class="hud-bar-fill" style="width:${hpPercent}%"></div><span class="hud-bar-text">${ds.currentHp}/${ds.maxHp}</span></div>
-    </div>
-    <div class="hud-bar-group">
-      <label class="hud-bar-label">${t('dungeon_ui.sanity')}</label>
-      <div class="hud-bar sanity-bar"><div class="hud-bar-fill" style="width:${sanityPercent}%"></div><span class="hud-bar-text">${ds.sanity}/${ds.maxSanity}</span></div>
-    </div>
-    <div class="hud-bar-group">
-      <label class="hud-bar-label">${t('dungeon_ui.exp', '경험치')}</label>
-      <div class="hud-bar exp-bar"><div class="hud-bar-fill" style="width:${expPercent}%"></div><span class="hud-bar-text">${ds.exp}/${ds.expToNext}</span></div>
-    </div>
-  `;
+  let traitsHtml = '';
+  if (w.traits && w.traits.length > 0) {
+    traitsHtml = `<div class="hud-traits">` +
+      w.traits.map(t => `<span class="hud-trait-pill ${t.type}" title="${t.desc}">${t.icon} ${t.name}</span>`).join('') +
+      `</div>`;
+  }
 
-  if (ds.statusEffects && ds.statusEffects.length > 0) {
-    html += `<div class="hud-status-effects">` + ds.statusEffects.map(e => {
+  let statusHtml = '';
+  if (state.statusEffects && state.statusEffects.length > 0) {
+    statusHtml = `<div class="status-effects-list">` +
+      state.statusEffects.map(e => {
         const durText = e.duration === Infinity ? '∞' : `${e.duration}`;
-        const labelText = e.labelKey ? t(e.labelKey, e.id) : (e.label || e.id);
-        return `<span class="status-badge" title="${labelText} (${durText}턴)">${e.icon || '⚠️'} ${durText}</span>`;
-    }).join('') + `</div>`;
+        return `<span class="status-badge" title="${e.label || e.id}">${e.icon || '⚡'}<span class="status-dur">${durText}</span></span>`;
+      }).join('') +
+      `</div>`;
   }
 
-  html += `
-    <div class="hud-info-row" style="margin-top:8px;">
-      <span class="hud-info-item">📍 ${t('dungeon_ui.floor', '층')} ${ds.dungeonMap?.floors[ds.currentFloorIndex]?.floor || 1}</span>
-      <span class="hud-info-item">🆙 Lv.${ds.level} ${ds.freeStatPoints > 0 ? `<button id="btnOpenStats" class="btn-levelup-trigger pulse">스탯 배분</button>` : ''}</span>
-    </div>
-  `;
+  const wClass = `HUD`; // simplified
 
-  return html;
-}
+  // HUD
+  const el = document.getElementById('hudPanel');
+  if (el) {
+    el.innerHTML = `
+      <div class="hud-header">
+          <div class="hud-portrait">${w.portrait}</div>
+          <div class="hud-basic">
+            <div class="hud-name">${w.name} ${traitsHtml}</div>
+            <div class="hud-class">${wClass} <span class="hud-level">Lv.${state.level}</span></div>
+            <div class="hud-exp-bar" title="EXP: ${state.exp} / ${state.expToNext}">
+              <div class="hud-exp-fill" style="width: ${(state.exp / state.expToNext) * 100}%"></div>
+            </div>
+            ${statusHtml}
+          </div>
+      </div>
+      <div class="hud-stats-grid">
+          <div class="stat-hp">
+              <span class="stat-label">HP</span>
+              <div class="bar-bg"><div class="bar-fill hp-fill" style="width:${hpPct}%"></div></div>
+              <span class="stat-val">${hpStr}</span>
+          </div>
+          <div class="stat-sanity">
+              <span class="stat-label">이성</span>
+              <div class="bar-bg sanity-bg ${isDanger ? 'glitch-bg' : ''}">
+                  <div class="bar-fill sanity-fill ${sanityStatus.class}" style="width:${state.sanity}%"></div>
+              </div>
+              <span class="stat-val ${sanityStatus.class}">${state.sanity}%</span>
+          </div>
+      </div>
+      <button class="btn-stats ${state.freeStatPoints > 0 ? 'pulse' : ''}" id="btnOpenStats">
+        캐릭터 상세 & 스탯 ${state.freeStatPoints > 0 ? `<span class="badge">${state.freeStatPoints}</span>` : ''}
+      </button>
+    `;
 
-function refreshHUD(ds) {
-  const hudEl = document.getElementById('hudPanel');
-  if (!hudEl) return;
-  hudEl.innerHTML = `<h3>${t('dungeon_ui.player_info')}</h3>` + renderHUD(ds);
-}
-
-function updateSanityVFX(ds) {
-  const vfx = document.getElementById('sanityVfx') || createSanityVfx();
-  if (ds.sanity <= 30) {
-    vfx.classList.add('sanity-vfx-active');
-    if (ds.sanity <= 10) {
-      vfx.classList.add('sanity-vfx-madness');
-    } else {
-      vfx.classList.remove('sanity-vfx-madness');
-    }
-  } else {
-    vfx.classList.remove('sanity-vfx-active', 'sanity-vfx-madness');
+    document.getElementById('btnOpenStats')?.addEventListener('click', () => {
+      // openLevelUpOverlay(() => refreshHUD(getDungeonState()));
+    });
   }
 }
 
-function createSanityVfx() {
-  const el = document.createElement('div');
-  el.id = 'sanityVfx';
-  el.className = 'sanity-vfx';
-  document.body.appendChild(el);
-  return el;
+function refreshHUD(state) {
+  renderHUD(state);
 }
+"""
 
-setUpdateCallback((newState) => {
-  const ds = newState;
-  const container = document.getElementById('app'); // Fallback if needed, though state pushes update
-  if (ds) {
-    refreshHUD(ds);
-    updateSanityVFX(ds);
-    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
-    if (floorMap && floorMap.cells) {
-      updateBoardVisibility(floorMap.cells);
-    }
-  }
-});
+with open('c:/Work/round-the-dungeon/src/scenes/dungeonScene.js', 'w', encoding='utf-8') as f:
+    f.write(new_content)
