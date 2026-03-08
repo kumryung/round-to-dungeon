@@ -116,233 +116,346 @@ function autoGenerateFloor(theme, floorConfig) {
     const maxTiles = floorConfig.tileCount[1];
     const targetTiles = Math.floor(Math.random() * (maxTiles - minTiles + 1)) + minTiles;
 
-    // Track all occupied cell coordinates globally to prevent overlaps
-    const occupied = new Set();
+    // Retry loop for connectivity failures
+    const maxGenerationRetries = 10;
+    
+    for (let tryNum = 1; tryNum <= maxGenerationRetries; tryNum++) {
+        const floorMap = tryGenerateFloor(theme, floorConfig, targetTiles, tryNum);
+        
+        // Final Pathfinding Validation (Hub -> End)
+        if (floorMap.hubCellIndex !== undefined && floorMap.endCellIndex !== undefined) {
+            if (validatePathExists(floorMap.hubCellIndex, floorMap.endCellIndex, floorMap.adjacency)) {
+                console.log(`[MapEngine] ✅ Floor generation successful on try ${tryNum} (Target: ${targetTiles} tiles). Path from Hub to End confirmed.`);
+                return floorMap;
+            } else {
+                console.warn(`[MapEngine] ⚠️ Generation try ${tryNum} failed: Hub and End are not connected.`);
+            }
+        } else {
+            console.warn(`[MapEngine] ⚠️ Generation try ${tryNum} failed: Missing Hub or End cell.`);
+        }
+    }
+    
+    console.error(`[MapEngine] ❌ Failed to generate a valid connected floor after ${maxGenerationRetries} attempts.`);
+    // Fallback: Just return the last attempt
+    return tryGenerateFloor(theme, floorConfig, targetTiles, 0); 
+}
 
-    // Start by placing the start tile at 0,0
+/**
+ * Attempts one generation pass using a Clockwise Spiral algorithm
+ */
+function tryGenerateFloor(theme, floorConfig, targetTiles, tryNum) {
+    // 1. Initial State
+    const occupied = new Set();
+    const placedTiles = [];
+    const openExits = []; // { sourceTileId, dir, r, c, sourceR, sourceC }
+    const validConnections = new Set(); // { "r1,c1-r2,c2" }
     const startTileDef = getRandomTileByThemeAndType(theme, floorConfig.startType);
     if (!startTileDef) throw new Error(`Cannot find start tile for theme ${theme} type ${floorConfig.startType}`);
 
-    const placedTiles = [];
-    placedTiles.push({
-        id: 'tile_0',
-        def: startTileDef,
-        globalRow: 0,
-        globalCol: 0,
-        isStart: true,
-        isEnd: false
+    placedTiles.push({ 
+        id: 'tile_0', 
+        def: startTileDef, 
+        globalRow: 0, 
+        globalCol: 0, 
+        isStart: true, 
+        isEnd: false,
+        connectedExits: new Set(),
+        layout: JSON.parse(JSON.stringify(startTileDef.layout))
     });
     markOccupied(startTileDef, 0, 0, occupied);
 
-    // Valid tile types for the middle of the floor (not hub, not exit, not stairs usually)
-    const midTypes = TILE_TYPES.filter(t => t !== 'hub' && t !== 'exit' && t !== 'stairs');
+    // Clockwise direction iteration (top -> right -> bottom -> left)
+    const CLOCKWISE_DIRS = ['top', 'right', 'bottom', 'left'];
 
-    let currentTiles = 1;
-
-    const openExits = []; // { sourceTileId, dir, r, c }
-
-    function addExits(placedTile) {
+    function pushExits(placedTile) {
         const { def, globalRow, globalCol } = placedTile;
         const height = def.layout.length;
         const width = def.layout[0].length;
 
-        for (const dir in def.exits) {
-            def.exits[dir].forEach(exit => {
-                let nextR, nextC;
-                if (dir === 'top') {
-                    nextR = globalRow - 1;
-                    nextC = globalCol + exit.col;
-                } else if (dir === 'bottom') {
-                    nextR = globalRow + height;
-                    nextC = globalCol + exit.col;
-                } else if (dir === 'left') {
-                    nextR = globalRow + exit.row;
-                    nextC = globalCol - 1;
-                } else if (dir === 'right') {
-                    nextR = globalRow + exit.row;
-                    nextC = globalCol + width;
-                }
-                openExits.push({
-                    sourceTileId: placedTile.id,
-                    dir: dir,
-                    r: nextR,
-                    c: nextC
+        // Push exits in clockwise order relative to the tile layout loop
+        CLOCKWISE_DIRS.forEach(dir => {
+            if (def.exits[dir]) {
+                def.exits[dir].forEach(exit => {
+                    let nextR, nextC;
+                    let sourceR, sourceC;
+                    if (dir === 'top') { nextR = globalRow - 1; nextC = globalCol + exit.col; sourceR = globalRow; sourceC = globalCol + exit.col; }
+                    else if (dir === 'bottom') { nextR = globalRow + height; nextC = globalCol + exit.col; sourceR = globalRow + height - 1; sourceC = globalCol + exit.col; }
+                    else if (dir === 'left') { nextR = globalRow + exit.row; nextC = globalCol - 1; sourceR = globalRow + exit.row; sourceC = globalCol; }
+                    else if (dir === 'right') { nextR = globalRow + exit.row; nextC = globalCol + width; sourceR = globalRow + exit.row; sourceC = globalCol + width - 1; }
+                    
+                    openExits.push({ sourceTileId: placedTile.id, dir: dir, r: nextR, c: nextC, sourceR, sourceC });
                 });
-            });
-        }
-    }
-
-    addExits(placedTiles[0]);
-
-    // Add middle tiles
-    let attempts = 0;
-    const maxAttempts = targetTiles * 20; // prevent infinite loops
-    while (currentTiles < targetTiles - 1 && openExits.length > 0 && attempts < maxAttempts) {
-        attempts++;
-        // Pick a random open exit
-        const exitIdx = Math.floor(Math.random() * openExits.length);
-        const targetExit = openExits[exitIdx];
-
-        // Pick a random mid tile
-        const nextDef = getRandomTileFromPool(theme, midTypes);
-        if (!nextDef) continue;
-
-        // Find which local exit on the new tile connects to our open exit's opposite direction
-        const connectDir = getOppositeDirection(targetExit.dir);
-        if (!nextDef.exits[connectDir] || nextDef.exits[connectDir].length === 0) {
-            continue; // Tile doesn't have a matching entrance, skip
-        }
-
-        const entrance = nextDef.exits[connectDir][0];
-        const height = nextDef.layout.length;
-        const width = nextDef.layout[0].length;
-
-        // Calculate globalRow, globalCol based on aligning the entrance to targetExit.r, targetExit.c
-        let globalRow, globalCol;
-
-        // The bridge sits exactly at the target open exit cell
-        const bridgeR = targetExit.r;
-        const bridgeC = targetExit.c;
-
-        if (connectDir === 'top') {
-            globalRow = bridgeR + 1;
-            globalCol = bridgeC - entrance.col;
-        } else if (connectDir === 'bottom') {
-            globalRow = bridgeR - height;
-            globalCol = bridgeC - entrance.col;
-        } else if (connectDir === 'left') {
-            globalRow = bridgeR - entrance.row;
-            globalCol = bridgeC + 1;
-        } else if (connectDir === 'right') {
-            globalRow = bridgeR - entrance.row;
-            globalCol = bridgeC - width;
-        }
-
-        // *** Overlap check – skip if any cell is already occupied ***
-        const bridgeDef = { layout: [[1]], exits: {}, tileType: 'corridor' };
-        if (checkOverlap(bridgeDef, bridgeR, bridgeC, occupied)) {
-            // If we can't build a bridge, remove this exit to prevent infinite loops on a blocked path
-            openExits.splice(exitIdx, 1);
-            continue;
-        }
-        if (checkOverlap(nextDef, globalRow, globalCol, occupied)) {
-            // Temporary failure, keep the exit in the pool to try a smaller tile next time
-            continue;
-        }
-
-        // Success! Remove the exit and mark occupied
-        openExits.splice(exitIdx, 1);
-
-        markOccupied(bridgeDef, bridgeR, bridgeC, occupied);
-        markOccupied(nextDef, globalRow, globalCol, occupied);
-
-        placedTiles.push({
-            id: `bridge_${currentTiles}`,
-            def: bridgeDef,
-            globalRow: bridgeR,
-            globalCol: bridgeC,
-            isStart: false,
-            isEnd: false
+            }
         });
-
-        const newTile = {
-            id: `tile_${currentTiles}`,
-            def: nextDef,
-            globalRow: globalRow,
-            globalCol: globalCol,
-            isStart: false,
-            isEnd: false
-        };
-        placedTiles.push(newTile);
-        addExits(newTile);
-        currentTiles++;
     }
 
-    // Finally add the end tile
+    pushExits(placedTiles[0]);
+
+    const midTypes = TILE_TYPES.filter(t => t !== 'hub' && t !== 'exit' && t !== 'stairs');
+    let currentTiles = 1;
+
+    // 2. Middle Tile placement loop
+    while (currentTiles < targetTiles - 1 && openExits.length > 0) {
+        // Pop the first exit in queue (acts as BFS spreading outwards)
+        const targetExit = openExits.shift();
+
+        // Randomize tile pool order for variety
+        const shuffledTypes = [...midTypes].sort(() => Math.random() - 0.5);
+        let placed = false;
+
+        for (const midType of shuffledTypes) {
+            const nextDefList = Object.values(TILES).filter(t => t.theme === theme && t.tileType === midType);
+            nextDefList.sort(() => Math.random() - 0.5); // Shuffle variations of the same type
+            
+            for (const nextDef of nextDefList) {
+                const connectDir = getOppositeDirection(targetExit.dir);
+                if (!nextDef.exits[connectDir] || nextDef.exits[connectDir].length === 0) continue;
+
+                // Test every entrance on this face
+                for (const entrance of nextDef.exits[connectDir]) {
+                    const height = nextDef.layout.length;
+                    const width = nextDef.layout[0].length;
+
+                    let globalRow, globalCol;
+                    if (connectDir === 'top') { globalRow = targetExit.r; globalCol = targetExit.c - entrance.col; }
+                    else if (connectDir === 'bottom') { globalRow = targetExit.r - height + 1; globalCol = targetExit.c - entrance.col; }
+                    else if (connectDir === 'left') { globalRow = targetExit.r - entrance.row; globalCol = targetExit.c; }
+                    else if (connectDir === 'right') { globalRow = targetExit.r - entrance.row; globalCol = targetExit.c - width + 1; }
+
+                    if (!checkOverlap(nextDef, globalRow, globalCol, occupied)) {
+                        markOccupied(nextDef, globalRow, globalCol, occupied);
+                        
+                        const newTile = {
+                            id: `tile_${currentTiles}`,
+                            def: nextDef,
+                            globalRow: globalRow,
+                            globalCol: globalCol,
+                            isStart: false,
+                            isEnd: false,
+                            connectedExits: new Set(),
+                            layout: JSON.parse(JSON.stringify(nextDef.layout))
+                        };
+                        placedTiles.push(newTile);
+                        
+                        // Register structural connection for pruning
+                        const sourceTile = placedTiles.find(pt => pt.id === targetExit.sourceTileId);
+                        if (sourceTile) sourceTile.connectedExits.add(targetExit.dir);
+                        newTile.connectedExits.add(connectDir);
+                        
+                        validConnections.add(`${targetExit.sourceR},${targetExit.sourceC}-${targetExit.r},${targetExit.c}`);
+                        validConnections.add(`${targetExit.r},${targetExit.c}-${targetExit.sourceR},${targetExit.sourceC}`);
+                        
+                        pushExits(newTile); // Push new exits to queue
+                        
+                        currentTiles++;
+                        placed = true;
+                        break; // Entrance placed
+                    }
+                }
+                if (placed) break; // Variation placed
+            }
+            if (placed) break; // Type placed
+        }
+    }
+
+    // 3. Place End Tile (Exit/Stairs)
     const endTileDef = getRandomTileByThemeAndType(theme, floorConfig.endType);
     let endTilePlaced = false;
 
-    if (openExits.length > 0 && endTileDef) {
+    if (endTileDef) {
+        // Try to place on the very last open exits first (furthest outward edge)
         for (let i = openExits.length - 1; i >= 0; i--) {
             const targetExit = openExits[i];
             const connectDir = getOppositeDirection(targetExit.dir);
             if (endTileDef.exits[connectDir] && endTileDef.exits[connectDir].length > 0) {
-                const entrance = endTileDef.exits[connectDir][0];
-                const height = endTileDef.layout.length;
-                const width = endTileDef.layout[0].length;
+                for (const entrance of endTileDef.exits[connectDir]) {
+                    const height = endTileDef.layout.length;
+                    const width = endTileDef.layout[0].length;
+                    let globalRow, globalCol;
 
-                let globalRow, globalCol;
+                    if (connectDir === 'top') { globalRow = targetExit.r; globalCol = targetExit.c - entrance.col; }
+                    else if (connectDir === 'bottom') { globalRow = targetExit.r - height + 1; globalCol = targetExit.c - entrance.col; }
+                    else if (connectDir === 'left') { globalRow = targetExit.r - entrance.row; globalCol = targetExit.c; }
+                    else if (connectDir === 'right') { globalRow = targetExit.r - entrance.row; globalCol = targetExit.c - width + 1; }
 
-                // The bridge sits exactly at the target open exit cell
-                const bridgeR = targetExit.r;
-                const bridgeC = targetExit.c;
-
-                if (connectDir === 'top') {
-                    globalRow = bridgeR + 1;
-                    globalCol = bridgeC - entrance.col;
-                } else if (connectDir === 'bottom') {
-                    globalRow = bridgeR - height;
-                    globalCol = bridgeC - entrance.col;
-                } else if (connectDir === 'left') {
-                    globalRow = bridgeR - entrance.row;
-                    globalCol = bridgeC + 1;
-                } else if (connectDir === 'right') {
-                    globalRow = bridgeR - entrance.row;
-                    globalCol = bridgeC - width;
+                    if (!checkOverlap(endTileDef, globalRow, globalCol, occupied)) {
+                        markOccupied(endTileDef, globalRow, globalCol, occupied);
+                        const newTile = {
+                            id: 'tile_end',
+                            def: endTileDef,
+                            globalRow: globalRow,
+                            globalCol: globalCol,
+                            isStart: false,
+                            isEnd: true,
+                            connectedExits: new Set(),
+                            layout: JSON.parse(JSON.stringify(endTileDef.layout))
+                        };
+                        placedTiles.push(newTile);
+                        
+                        const sourceTile = placedTiles.find(pt => pt.id === targetExit.sourceTileId);
+                        if (sourceTile) sourceTile.connectedExits.add(targetExit.dir);
+                        newTile.connectedExits.add(connectDir);
+                        
+                        validConnections.add(`${targetExit.sourceR},${targetExit.sourceC}-${targetExit.r},${targetExit.c}`);
+                        validConnections.add(`${targetExit.r},${targetExit.c}-${targetExit.sourceR},${targetExit.sourceC}`);
+                        
+                        endTilePlaced = true;
+                        break;
+                    }
                 }
-
-                // Check overlap for bridge and end tile
-                const bridgeDef = { layout: [[1]], exits: {}, tileType: 'corridor' };
-                if (checkOverlap(bridgeDef, bridgeR, bridgeC, occupied)) continue;
-                if (checkOverlap(endTileDef, globalRow, globalCol, occupied)) continue;
-
-                markOccupied(bridgeDef, bridgeR, bridgeC, occupied);
-                markOccupied(endTileDef, globalRow, globalCol, occupied);
-
-                placedTiles.push({
-                    id: `bridge_end`,
-                    def: bridgeDef,
-                    globalRow: bridgeR,
-                    globalCol: bridgeC,
-                    isStart: false,
-                    isEnd: false
-                });
-
-                placedTiles.push({
-                    id: 'tile_end',
-                    def: endTileDef,
-                    globalRow: globalRow,
-                    globalCol: globalCol,
-                    isStart: false,
-                    isEnd: true
-                });
-                endTilePlaced = true;
-                break;
             }
+            if (endTilePlaced) break;
+        }
+
+        // 4. Fallback Placement for End Tile (if trapped)
+        if (!endTilePlaced && placedTiles.length > 0) {
+            console.warn(`[MapEngine] Trapped end tile! Forcing placement for try ${tryNum}.`);
+            // Force it down far below to prevent overlapping, although BFS will fail and cause it to retry (which is good)
+            const lastTile = placedTiles[placedTiles.length - 1];
+            placedTiles.push({
+                id: 'tile_end',
+                def: endTileDef,
+                globalRow: lastTile.globalRow + lastTile.def.layout.length + 5,
+                globalCol: lastTile.globalCol,
+                isStart: false,
+                isEnd: true,
+                connectedExits: new Set(),
+                layout: JSON.parse(JSON.stringify(endTileDef.layout))
+            });
         }
     }
 
-    if (!endTilePlaced) {
-        // Fallback if no matching connection: place it at offset
-        const lastTile = placedTiles[placedTiles.length - 1];
-        const fallbackRow = lastTile.globalRow + lastTile.def.layout.length + 2;
-        const fallbackCol = lastTile.globalCol;
-        // Don't check overlap for fallback — it's a last resort
-        placedTiles.push({
-            id: 'tile_end',
-            def: endTileDef,
-            globalRow: fallbackRow,
-            globalCol: fallbackCol,
-            isStart: false,
-            isEnd: true
-        });
-    }
+    // 4.4 Cross-link Adjacent Tiles (Create Cycles and Intertwine)
+    const MAX_BRIDGE_DIST = 10; // allow stretching paths up to 10 cells to organically intertwine
 
-    // Now, build the logical 1D cell array and adjacency list
-    return compileFloorData(floorConfig.floor, placedTiles);
+    const initialTiles = [...placedTiles];
+    let bridgeCount = 0;
+
+    initialTiles.forEach(pt => {
+        ['top', 'right', 'bottom', 'left'].forEach(dir => {
+            if (pt.def.exits[dir] && pt.def.exits[dir].length > 0 && !pt.connectedExits.has(dir)) {
+                
+                // Track if we successfully bridged from this face
+                let faceBridged = false;
+
+                pt.def.exits[dir].forEach(exit => {
+                    const height = pt.layout.length;
+                    const width = pt.layout[0].length;
+                    
+                    let startR, startC, exitR, exitC, dr = 0, dc = 0;
+                    if (dir === 'top') { startR = pt.globalRow - 1; startC = pt.globalCol + exit.col; exitR = pt.globalRow; exitC = pt.globalCol + exit.col; dr = -1; dc = 0; }
+                    else if (dir === 'bottom') { startR = pt.globalRow + height; startC = pt.globalCol + exit.col; exitR = pt.globalRow + height - 1; exitC = pt.globalCol + exit.col; dr = 1; dc = 0; }
+                    else if (dir === 'left') { startR = pt.globalRow + exit.row; startC = pt.globalCol - 1; exitR = pt.globalRow + exit.row; exitC = pt.globalCol; dr = 0; dc = -1; }
+                    else if (dir === 'right') { startR = pt.globalRow + exit.row; startC = pt.globalCol + width; exitR = pt.globalRow + exit.row; exitC = pt.globalCol + width - 1; dr = 0; dc = 1; }
+                    
+                    let hitCoords = null;
+                    const bridgeCells = [];
+                    
+                    for (let dist = 0; dist < MAX_BRIDGE_DIST; dist++) {
+                        const currR = startR + dr * dist;
+                        const currC = startC + dc * dist;
+                        
+                        // Check if this cell is occupied by ANY '1' cell in ANY tile
+                        let hitAny = false;
+                        for (const other of placedTiles) {
+                            // ignore self for the first few steps to avoid immediate self-collision
+                            if (other.id === pt.id && dist < 2) continue; 
+                            
+                            const r = currR - other.globalRow;
+                            const c = currC - other.globalCol;
+                            if (r >= 0 && r < other.layout.length && c >= 0 && c < other.layout[0].length) {
+                                if (other.layout[r][c] === 1) {
+                                    hitAny = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (hitAny) {
+                            hitCoords = { r: currR, c: currC };
+                            break;
+                        } else {
+                            bridgeCells.push({ r: currR, c: currC });
+                        }
+                    }
+                    
+                    if (hitCoords) {
+                        // Found another path! Build the bridge cells
+                        let prevR = exitR;
+                        let prevC = exitC;
+                        bridgeCells.forEach(bCell => {
+                            placedTiles.push({
+                                id: `bridge_${bridgeCount++}`,
+                                def: { tileType: 'corridor', theme: theme, exits: {} },
+                                globalRow: bCell.r,
+                                globalCol: bCell.c,
+                                isStart: false,
+                                isEnd: false,
+                                connectedExits: new Set(),
+                                layout: [[1]]
+                            });
+                            
+                            validConnections.add(`${prevR},${prevC}-${bCell.r},${bCell.c}`);
+                            validConnections.add(`${bCell.r},${bCell.c}-${prevR},${prevC}`);
+                            prevR = bCell.r;
+                            prevC = bCell.c;
+                        });
+                        
+                        validConnections.add(`${prevR},${prevC}-${hitCoords.r},${hitCoords.c}`);
+                        validConnections.add(`${hitCoords.r},${hitCoords.c}-${prevR},${prevC}`);
+                        faceBridged = true;
+                    }
+                });
+
+                if (faceBridged) {
+                    pt.connectedExits.add(dir);
+                }
+            }
+        });
+    });
+
+    // 4.5 Prune Unused Exits (To completely eliminate dead-end stumps for perfect path loops)
+    placedTiles.forEach(pt => {
+        ['top', 'right', 'bottom', 'left'].forEach(dir => {
+            if (pt.def.exits && pt.def.exits[dir] && pt.def.exits[dir].length > 0 && !pt.connectedExits.has(dir)) {
+                pt.def.exits[dir].forEach(exit => {
+                    const h = pt.layout.length;
+                    const w = pt.layout[0].length;
+                    if (dir === 'top' && exit.col < w) pt.layout[0][exit.col] = 0;
+                    else if (dir === 'bottom' && exit.col < w) pt.layout[h - 1][exit.col] = 0;
+                    else if (dir === 'left' && exit.row < h) pt.layout[exit.row][0] = 0;
+                    else if (dir === 'right' && exit.row < h) pt.layout[exit.row][w - 1] = 0;
+                });
+            }
+        });
+    });
+
+    // 5. Build Graph & Return
+    return compileFloorData(floorConfig.floor || 1, placedTiles, validConnections);
 }
 
-function compileFloorData(floorNum, placedTiles) {
+function validatePathExists(startIndex, endIndex, adjacency) {
+    if (startIndex === undefined || endIndex === undefined) return false;
+    const visited = new Set();
+    const queue = [startIndex];
+    visited.add(startIndex);
+
+    while (queue.length > 0) {
+        const curr = queue.shift();
+        if (curr === endIndex) return true;
+        
+        const neighbors = adjacency[curr] || [];
+        for (const next of neighbors) {
+            if (!visited.has(next)) {
+                visited.add(next);
+                queue.push(next);
+            }
+        }
+    }
+    return false;
+}
+
+function compileFloorData(floorNum, placedTiles, validConnections) {
     const cells = [];
     const cellMap = new Map(); // "r,c" -> cell object
 
@@ -351,7 +464,7 @@ function compileFloorData(floorNum, placedTiles) {
 
     // 1. Create all cells (skip duplicates at same coordinate)
     placedTiles.forEach(pt => {
-        const layout = pt.def.layout;
+        const layout = pt.layout;
         for (let r = 0; r < layout.length; r++) {
             for (let c = 0; c < layout[0].length; c++) {
                 if (layout[r][c] === 1) {
@@ -390,7 +503,7 @@ function compileFloorData(floorNum, placedTiles) {
         }
     });
 
-    // 2. Build adjacency list based on physical proximity (4-way)
+    // 2. Build adjacency list based on physical proximity (4-way) AND tight tile logic
     const adjacency = {};
     cells.forEach(cell => {
         const neighbors = [];
@@ -400,7 +513,12 @@ function compileFloorData(floorNum, placedTiles) {
             const nc = cell.gc + d[1];
             const ncell = cellMap.get(`${nr},${nc}`);
             if (ncell) {
-                neighbors.push(ncell.index);
+                // Only connect if they belong to the same tile layout, OR explicitly defined cross-tile links
+                if (cell.tileId === ncell.tileId) {
+                    neighbors.push(ncell.index);
+                } else if (validConnections && validConnections.has(`${cell.gr},${cell.gc}-${ncell.gr},${ncell.gc}`)) {
+                    neighbors.push(ncell.index);
+                }
             }
         });
         adjacency[cell.index] = neighbors;
