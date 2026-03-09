@@ -494,7 +494,8 @@ function compileFloorData(floorNum, placedTiles, validConnections) {
                         isEnd: pt.isEnd,
                         object: null,
                         objectData: null,
-                        visibility: 'hidden' // hidden, fog, visible
+                        hidden: false, // For mystery tiles ('?')
+                        visibility: 'shroud' // shroud, fog, visible
                     };
                     cells.push(cell);
                     cellMap.set(key, cell);
@@ -601,6 +602,34 @@ export function getAdjacentCells(floorMap, cellIndex) {
     return floorMap.adjacency[cellIndex] || [];
 }
 
+// ─── Pathfinding ───
+
+export function findShortestPath(floorMap, startIdx, endIdx) {
+    if (startIdx === endIdx) return [];
+    
+    const queue = [[startIdx]];
+    const visited = new Set([startIdx]);
+
+    while (queue.length > 0) {
+        const path = queue.shift();
+        const node = path[path.length - 1];
+
+        if (node === endIdx) {
+            // Return path excluding start node
+            return path.slice(1);
+        }
+
+        const neighbors = floorMap.adjacency[node] || [];
+        for (const neighbor of neighbors) {
+            if (!visited.has(neighbor)) {
+                visited.add(neighbor);
+                queue.push([...path, neighbor]);
+            }
+        }
+    }
+    return null; // No path found
+}
+
 // ─── Rendering ───
 
 // Module-level cache of cell DOM elements keyed by cell index
@@ -613,8 +642,10 @@ export function renderFloorMap(floorMap, container, theme) {
     // Keep board-container as base class, add board-grid and theme
     container.className = 'board-container board-grid' + (theme ? ` board-theme-${theme}` : '');
     container.style.display = 'grid';
-    container.style.gridTemplateColumns = `repeat(${floorMap.gridWidth}, 1fr)`;
-    container.style.gridTemplateRows = `repeat(${floorMap.gridHeight}, 1fr)`;
+    container.style.width = `${floorMap.gridWidth * 50}px`;
+    container.style.height = `${floorMap.gridHeight * 50}px`;
+    container.style.gridTemplateColumns = `repeat(${floorMap.gridWidth}, 50px)`;
+    container.style.gridTemplateRows = `repeat(${floorMap.gridHeight}, 50px)`;
 
     // Create a physical DOM grid
     const gridArr = Array.from({ length: floorMap.gridHeight }, () => Array(floorMap.gridWidth).fill(null));
@@ -692,9 +723,14 @@ function createCellElement(cell, hubIdx, endIdx) {
     objEl.id = `cell-obj-${cell.index}`;
 
     if (cell.object) {
-        const icons = { monster: '💀', chest: '📦', event: '❓', boss: '👑' };
-        objEl.textContent = icons[cell.object] || '';
-        el.classList.add(`has-${cell.object}`);
+        if (cell.hidden) {
+            objEl.textContent = '❓';
+            el.classList.add('has-hidden-object');
+        } else {
+            const icons = { monster: '💀', chest: '📦', event: '❓', boss: '👑' };
+            objEl.textContent = icons[cell.object] || '';
+            el.classList.add(`has-${cell.object}`);
+        }
     }
 
     el.appendChild(objEl);
@@ -719,6 +755,24 @@ export function setTileObject(index, objectType) {
     const icons = { monster: '💀', chest: '📦', event: '❓', boss: '👑' };
     objEl.textContent = icons[objectType] || '';
     cellEl.classList.add(`has-${objectType}`);
+}
+
+export function revealTileObject(index, objectType) {
+    const cellEl = cellElements.get(index) || document.getElementById(`cell-${index}`);
+    if (!cellEl) return;
+    
+    const objEl = cellEl.querySelector('.tile-object');
+    if (!objEl) return;
+
+    cellEl.classList.remove('has-hidden-object');
+    
+    if (objectType) {
+        const icons = { monster: '💀', chest: '📦', event: '❓', boss: '👑' };
+        objEl.textContent = icons[objectType] || '';
+        cellEl.classList.add(`has-${objectType}`);
+    } else {
+        objEl.textContent = '';
+    }
 }
 
 export function movePlayerToken(index, animate = true) {
@@ -770,4 +824,254 @@ export function updateBoardVisibility(cells) {
             el.dataset.visibility = cell.visibility;
         }
     });
+}
+
+// ─── Interactive Controls ───
+
+let tileClickHandler = null;
+let tileHoverHandler = null;
+let activeHoverCell = null;
+
+export function enableTileClick(floorMap, playerPos, onClickCallback, onHoverCallback) {
+    disableTileClick(); // Ensure clean state
+
+    // Find all reachable cells via BFS to allow clicking only valid destinations
+    const reachable = new Set();
+    const queue = [playerPos];
+    reachable.add(playerPos);
+    
+    // Actually anywhere in the connected graph is reachable, but we can verify it
+    while(queue.length > 0) {
+        const curr = queue.shift();
+        for (const next of (floorMap.adjacency[curr] || [])) {
+            if (!reachable.has(next)) {
+                reachable.add(next);
+                queue.push(next);
+            }
+        }
+    }
+
+    tileClickHandler = (e) => {
+        const tileEl = e.target.closest('.tile');
+        if (!tileEl) {
+            console.log("Clicked something else, not a tile", e.target);
+            return;
+        }
+        const index = parseInt(tileEl.dataset.index, 10);
+        console.log(`Tile Clicked: index ${index}, reachable? ${reachable.has(index)}, playerPos? ${index === playerPos}`);
+        if (reachable.has(index) && index !== playerPos) {
+            onClickCallback(index);
+        }
+    };
+
+    tileHoverHandler = (e) => {
+        const tileEl = e.target.closest('.tile');
+        if (!tileEl) {
+            if (activeHoverCell !== null) {
+                onHoverCallback(null);
+                activeHoverCell = null;
+            }
+            return;
+        }
+        
+        const index = parseInt(tileEl.dataset.index, 10);
+        if (reachable.has(index) && index !== activeHoverCell && index !== playerPos) {
+            activeHoverCell = index;
+            const path = findShortestPath(floorMap, playerPos, index);
+            onHoverCallback(path, index);
+        }
+    };
+
+    const board = document.getElementById('boardContainer');
+    if (board) {
+        board.addEventListener('click', tileClickHandler);
+        board.addEventListener('mousemove', tileHoverHandler);
+        board.classList.add('interactable');
+    }
+    
+    // Highlight all reachable tiles
+    reachable.forEach(idx => {
+        if (idx === playerPos) return;
+        const cell = floorMap.cells.find(c => c.index === idx);
+        if (cell) {
+            const el = cellElements.get(idx) || document.getElementById(`cell-${idx}`);
+            if (el) el.classList.add('tile-clickable');
+        }
+    });
+}
+
+export function disableTileClick() {
+    const board = document.getElementById('boardContainer');
+    if (board) {
+        if (tileClickHandler) board.removeEventListener('click', tileClickHandler);
+        if (tileHoverHandler) board.removeEventListener('mousemove', tileHoverHandler);
+        board.classList.remove('interactable');
+    }
+    tileClickHandler = null;
+    tileHoverHandler = null;
+    activeHoverCell = null;
+
+    document.querySelectorAll('.tile-clickable').forEach(el => el.classList.remove('tile-clickable'));
+    clearPathPreview();
+}
+
+export function showPathPreview(path) {
+    clearPathPreview();
+    if (!path || path.length === 0) return;
+    
+    path.forEach(idx => {
+        const el = cellElements.get(idx) || document.getElementById(`cell-${idx}`);
+        if (el) el.classList.add('tile-path-preview');
+    });
+}
+
+export function clearPathPreview() {
+    document.querySelectorAll('.tile-path-preview').forEach(el => el.classList.remove('tile-path-preview'));
+}
+
+// ─── Camera Panning and Zooming ───
+let currentScale = 1;
+let currentPanX = 0;
+let currentPanY = 0;
+let isDragging = false;
+let startDragX = 0;
+let startDragY = 0;
+let initialPanX = 0;
+let initialPanY = 0;
+let activeViewport = null;
+let activeGridContainer = null;
+let activeFloorMap = null;
+
+export function initMapControls(viewportId, containerId, btnCenterId, floorMap) {
+    const viewport = document.getElementById(viewportId);
+    activeGridContainer = document.getElementById(containerId);
+    activeFloorMap = floorMap;
+    activeViewport = viewport;
+
+    if (!viewport || !activeGridContainer) return;
+
+    // Reset layout sizes for the fixed tile setup
+    activeGridContainer.style.width = `${floorMap.gridWidth * 50}px`;
+    activeGridContainer.style.height = `${floorMap.gridHeight * 50}px`;
+    // We remove repeat(X, 1fr) for fixed pixels to avoid decimal rounding tearing
+    activeGridContainer.style.gridTemplateColumns = `repeat(${floorMap.gridWidth}, 50px)`;
+    activeGridContainer.style.gridTemplateRows = `repeat(${floorMap.gridHeight}, 50px)`;
+
+    // Mouse Dragging
+    viewport.addEventListener('mousedown', (e) => {
+        if(e.button !== 0) return; // Only left click
+        isDragging = true;
+        startDragX = e.clientX;
+        startDragY = e.clientY;
+        initialPanX = currentPanX;
+        initialPanY = currentPanY;
+        viewport.classList.add('dragging');
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging || !activeGridContainer) return;
+
+        const dx = e.clientX - startDragX;
+        const dy = e.clientY - startDragY;
+
+        currentPanX = initialPanX + dx;
+        currentPanY = initialPanY + dy;
+
+        updateCameraTransform();
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+        if (viewport) viewport.classList.remove('dragging');
+    });
+
+    // Mouse Wheel Zooming
+    viewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const zoomSensitivity = 0.0015;
+        const delta = e.deltaY * zoomSensitivity;
+        let newScale = currentScale - delta;
+        newScale = Math.max(0.3, Math.min(newScale, 3)); // Allow reasonably far zoom
+
+        const scaleRatio = newScale / currentScale;
+        currentPanX = mouseX - (mouseX - currentPanX) * scaleRatio;
+        currentPanY = mouseY - (mouseY - currentPanY) * scaleRatio;
+        currentScale = newScale;
+
+        updateCameraTransform();
+    }, { passive: false });
+
+    // Center Button
+    const btnCenter = document.getElementById(btnCenterId);
+    if (btnCenter) {
+        btnCenter.addEventListener('click', centerCameraOnPlayer);
+    }
+}
+
+function updateCameraTransform() {
+    if (activeGridContainer) {
+        activeGridContainer.style.transform = `translate(${currentPanX}px, ${currentPanY}px) scale(${currentScale})`;
+    }
+}
+
+export function centerCameraOnCell(index) {
+    if (!activeViewport || !activeGridContainer) return;
+
+    const cellEl = cellElements.get(index) || document.getElementById(`cell-${index}`);
+    if (!cellEl) return;
+
+    // Use token offset logic from cellEl
+    const left = cellEl.offsetLeft + cellEl.offsetWidth / 2;
+    const top = cellEl.offsetTop + cellEl.offsetHeight / 2;
+
+    const viewportRect = activeViewport.getBoundingClientRect();
+
+    currentScale = 1;
+    currentPanX = (viewportRect.width / 2) - left;
+    currentPanY = (viewportRect.height / 2) - top;
+
+    // Smooth transit 
+    activeGridContainer.style.transition = 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+    updateCameraTransform();
+
+    // Wipe out the transition purely so dragging isn't delayed afterwards
+    setTimeout(() => {
+        if (activeGridContainer) activeGridContainer.style.transition = 'none';
+    }, 400);
+}
+
+export function centerCameraOnPlayer() {
+    // Determine player's cell index from token dataset or implicitly using dungeonState. 
+    // Wait, the easiest is to just let scene manager pass the index. 
+    // Fallback: finding the tile-current element.
+    const currentCell = document.querySelector('.tile.tile-current');
+    if (currentCell && currentCell.dataset.index) {
+        centerCameraOnCell(parseInt(currentCell.dataset.index));
+    } else {
+        // Find token's raw coordinates as fallback if no current tile is set
+        if (!activeViewport || !activeGridContainer) return;
+
+        const token = document.getElementById('playerToken');
+        if (!token) return;
+
+        const tokenLeft = parseFloat(token.style.left) || 0;
+        const tokenTop = parseFloat(token.style.top) || 0;
+
+        const viewportRect = activeViewport.getBoundingClientRect();
+
+        currentScale = 1;
+        currentPanX = (viewportRect.width / 2) - tokenLeft;
+        currentPanY = (viewportRect.height / 2) - tokenTop;
+
+        activeGridContainer.style.transition = 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+        updateCameraTransform();
+
+        setTimeout(() => {
+            if (activeGridContainer) activeGridContainer.style.transition = 'none';
+        }, 400);
+    }
 }

@@ -1,11 +1,11 @@
 // ─── Dungeon Scene (던전씬) — Phase 4: Data Layer Integration ───
 import { changeScene } from '../sceneManager.js';
-import { renderFloorMap, movePlayerToken, setPlayerPortrait, setTileObject, updateBoardVisibility } from '../mapEngine.js';
+import { renderFloorMap, movePlayerToken, setPlayerPortrait, setTileObject, updateBoardVisibility, initMapControls, centerCameraOnPlayer, centerCameraOnCell, enableTileClick, disableTileClick, showPathPreview, clearPathPreview, findShortestPath } from '../mapEngine.js';
 import {
   initDungeonState, getDungeonState, setLogCallback, setUpdateCallback,
-  executeMovePhase, processMovementSteps, enterCurrentFloor, moveToNextFloor,
+  executeClickMove, incrementTurn, handleMoveStepEnd, enterCurrentFloor, moveToNextFloor,
   handleTileInteraction, getSanityStatus, loadDungeonState, reduceSanity,
-  tickStatusEffects, triggerUpdate
+  tickStatusEffects, triggerUpdate, updateVisibility, revealTile, hasStatusEffect
 } from '../dungeonState.js';
 import { getMonster } from '../data/monsters.js';
 import { initCombat, loadCombatState } from '../combatEngine.js';
@@ -16,7 +16,7 @@ import { rollChestLoot, rollMonsterLoot, ITEMS } from '../data/items.js';
 import { rollEvent } from '../data/events.js';
 import { applyOutcome, showEventModal } from '../eventOverlay.js';
 import { openCraftingOverlay } from '../craftingOverlay.js';
-import { sendToMailbox, addItemToStorage, getState, clearActiveDungeon, updateDungeonStatus } from '../gameState.js';
+import { sendToMailbox, addItemToStorage, getState, clearActiveDungeon, updateDungeonStatus, progressTownLevel } from '../gameState.js';
 import { playSFX } from '../soundEngine.js';
 import { screenShake } from '../vfxEngine.js';
 import { t } from '../i18n.js';
@@ -97,7 +97,10 @@ function renderScene(container, map, wanderer, ds, resume, prepInv, prepSafeBag)
         </aside>
 
         <section class="dungeon-center">
-          <div class="board-container" id="boardContainer"></div>
+          <div class="board-viewport" id="boardViewport">
+            <div class="board-container" id="boardContainer"></div>
+            <button id="btnCenterPlayer" class="btn-center-player" title="내 위치로 이동">🎯</button>
+          </div>
         </section>
 
         <aside class="dungeon-right">
@@ -126,11 +129,6 @@ function renderScene(container, map, wanderer, ds, resume, prepInv, prepSafeBag)
     logEl.scrollTop = logEl.scrollHeight;
   });
 
-  setUpdateCallback((state) => {
-    refreshTopbar(state);
-    refreshHUD(state);
-  });
-
   const inv = initInventory(wanderer, prepInv, prepSafeBag);
   if (resume && getState().activeDungeon?.inventory?.equipped) {
     inv.equipped = getState().activeDungeon.inventory.equipped;
@@ -145,8 +143,14 @@ function renderScene(container, map, wanderer, ds, resume, prepInv, prepSafeBag)
 
   if (wanderer) setPlayerPortrait(wanderer.portrait);
 
+  // Initialize camera controls BEFORE calculating player token offset
+  initMapControls('boardViewport', 'boardContainer', 'btnCenterPlayer', floorMap);
+
   requestAnimationFrame(() => {
     movePlayerToken(ds.playerPosition, false);
+
+    // Center the camera slightly after ensuring the token has moved
+    setTimeout(centerCameraOnPlayer, 60);
 
     const wName = wanderer?.nameKey ? t(wanderer.nameKey) : (wanderer?.name || t('dungeon_ui.wanderer'));
     if (!resume) {
@@ -230,148 +234,138 @@ async function showFloorTitle(floorNum) {
 }
 
 function showDicePopup(val, penalty = 0, isPenalized = false) {
-  const board = document.getElementById('boardContainer');
-  if (!board) return;
-
-  const popup = document.createElement('div');
-  popup.className = 'dice-popup' + (isPenalized ? ' dice-popup-penalized' : '');
-  if (isPenalized && penalty < 0) {
-    popup.innerHTML = `${val} <span class="dice-penalty-badge">${penalty}</span>`;
-  } else {
-    popup.textContent = val;
-  }
-  board.querySelectorAll('.dice-popup').forEach(p => p.remove());
-  board.appendChild(popup);
-  const duration = isPenalized ? 1400 : 1000;
-  setTimeout(() => popup.remove(), duration);
+  // Kept for backward compatibility or potential future UI effects
 }
 
 // ─── Game Flow ───
 function showMoveUI() {
+  const ds = getDungeonState();
+  const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
   const actionEl = document.getElementById('actionContent');
   if (!actionEl) return;
+  
   actionEl.innerHTML = `
   <div class="move-phase fade-in">
-    <button class="btn-action btn-roll-move" id="btnRollMove">${t('dungeon_ui.roll_move')}</button>
+    <p>${t('dungeon_ui.click_to_move', '이동할 타일을 클릭하세요.')}</p>
+    <div id="pathPreviewInfo" class="path-preview-info">
+      ${t('dungeon_ui.hover_path_info', '타일에 마우스를 올려 경로를 확인하세요.')}
+    </div>
   </div>
   `;
-  document.getElementById('btnRollMove').addEventListener('click', handleRollMove);
+
+  enableTileClick(floorMap, ds.playerPosition, handleTileClick, handleTileHover);
 }
 
-async function handleRollMove() {
-  const ds = getDungeonState();
-  const btn = document.getElementById('btnRollMove');
-  if (btn) btn.disabled = true;
-  playSFX('dice');
+function handleTileHover(path, targetCellIndex) {
+    const infoEl = document.getElementById('pathPreviewInfo');
+    if (!infoEl) return;
 
-  const result = executeMovePhase();
-  const rawRoll = result.rawRoll ?? result.roll;
-  const penalty = result.penaltyApplied || 0;
-
-  refreshTopbar(ds);
-  refreshHUD(ds);
-
-  if (penalty < 0) {
-    showDicePopup(rawRoll, 0, false);
-    await delay(700);
-    showDicePopup(result.roll, penalty, true);
-    addLog(`[무게 페널티] 주사위 ${rawRoll} ${penalty} = ${result.roll}`);
-    await delay(600);
-  } else {
-    showDicePopup(result.roll, 0, false);
-  }
-
-  await executeMovementSteps(result.roll);
-}
-
-async function executeMovementSteps(stepsRemaining, chosenNextCell = null) {
-  const ds = getDungeonState();
-  const moveRes = processMovementSteps(stepsRemaining, [], chosenNextCell);
-  
-  if (moveRes.pathSegment.length > 0) {
-    for (const pos of moveRes.pathSegment) {
-      movePlayerToken(pos, true);
-      if (ds.currentHp < ds.maxHp) {
-        ds.currentHp = Math.min(ds.maxHp, ds.currentHp + 1);
-        refreshHUD(ds);
-      }
-      await delay(350);
+    if (!path || path.length === 0) {
+        infoEl.innerHTML = t('dungeon_ui.hover_path_info', '타일에 마우스를 올려 경로를 확인하세요.');
+        clearPathPreview();
+        return;
     }
-  }
 
-  tickStatusEffects();
-  refreshTopbar(ds);
-  refreshHUD(ds);
-  if (ds.currentHp <= 0) { showGameOver(); return; }
+    const ds = getDungeonState();
+    
+    showPathPreview(path);
+    
+    const moveInfo = executeClickMove(targetCellIndex);
+    const totalCost = moveInfo.sanityCostPerTile * path.length;
+    
+    // We do NOT check for hidden tiles during hover to prevent spoiling players
+    // The player will just see the full path cost and distance, but will stop mid-way if they hit a '?'
+    let html = `이동 거리: <b>${path.length}</b>칸 | <span style="color:var(--sanity-color)">예상 정신력 소모: <b>${totalCost}</b></span>`;
+    infoEl.innerHTML = html;
+}
 
-  if (moveRes.stoppedForChoice) {
-      showDirectionChoiceUI(moveRes.availableChoices, moveRes.stepsRemaining);
+async function handleTileClick(targetCellIndex) {
+  const ds = getDungeonState();
+  const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
+  
+  disableTileClick();
+  playSFX('click');
+
+  const path = findShortestPath(floorMap, ds.playerPosition, targetCellIndex);
+  if (!path || path.length === 0) {
+      showMoveUI();
       return;
   }
 
-  if (moveRes.stepsRemaining === 0 || moveRes.stoppedForEvent) {
-      await resolveTileInteraction();
-  }
+  const moveInfo = executeClickMove(targetCellIndex);
+  incrementTurn(); 
+
+  refreshTopbar(ds);
+  refreshHUD(ds);
+
+  await executeMovementSteps(path, moveInfo.sanityCostPerTile);
 }
 
-function showDirectionChoiceUI(choices, stepsRemaining) {
-    const ds = getDungeonState();
-    const actionEl = document.getElementById('actionContent');
-    if (!actionEl) return;
+async function executeMovementSteps(path, sanityCostPerTile) {
+  const ds = getDungeonState();
+  const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
+  
+  let stoppedEarly = false;
 
-    let html = `
-    <div class="move-phase fade-in">
-        <p>갈림길에 도착했습니다. 방향을 선택하세요.</p>
-        <p>잔여 이동 수: ${stepsRemaining}</p>
-        <div class="direction-choices d-pad">
-    `;
+  for (let i = 0; i < path.length; i++) {
+    const nextPos = path[i];
+    const cell = floorMap.cells.find(c => c.index === nextPos);
 
-    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
-    const currCell = floorMap.cells.find(c => c.index === ds.playerPosition);
+    // Apply per-tile logic BEFORE moving into it
+    if (!hasStatusEffect('torch_buff')) {
+        const reduced = reduceSanity(sanityCostPerTile);
+    }
+    tickStatusEffects();
+    
+    if (ds.currentHp <= 0) {
+        showGameOver();
+        return;
+    }
 
-    let btnUp = '', btnDown = '', btnLeft = '', btnRight = '';
+    // Move token
+    movePlayerToken(nextPos, true);
+    handleMoveStepEnd(nextPos);
+    centerCameraOnCell(nextPos);
 
-    choices.forEach(cellIdx => {
-        const nextCell = floorMap.cells.find(c => c.index === cellIdx);
-        
-        // Prevent going back to the immediate previous position
-        if (cellIdx === ds.previousPosition && choices.length > 1) {
-            return; // Skip rendering this button so they can't go backwards
-        }
+    if (ds.currentHp < ds.maxHp && ds.sanity > 0) {
+        const SETTINGS = (await import('../data/settings.js')).SETTINGS;
+        ds.currentHp = Math.min(ds.maxHp, ds.currentHp + (SETTINGS.hpRegenPerTile || 1));
+    }
+    refreshHUD(ds);
+    
+    await delay(350);
 
-        const btnHtml = `<button class="btn-action direction-btn" data-target="${cellIdx}">`;
-        
-        if (nextCell.gr < currCell.gr) btnUp = btnHtml + '위로</button>';
-        else if (nextCell.gr > currCell.gr) btnDown = btnHtml + '아래로</button>';
-        else if (nextCell.gc < currCell.gc) btnLeft = btnHtml + '왼쪽으로</button>';
-        else if (nextCell.gc > currCell.gc) btnRight = btnHtml + '오른쪽으로</button>';
-    });
+    // Check if we hit a hidden/mystery tile. If so, stop immediately.
+    if (cell && cell.hidden) {
+        stoppedEarly = true;
+        // The tile interaction resolution will handle revealing it
+        break;
+    }
+    
+    // Also stop if it's the exit/boss
+    if (cell && cell.isEnd) {
+        stoppedEarly = true;
+        break;
+    }
+  }
 
-    html += `
-        <div class="d-pad-cell empty"></div>
-        <div class="d-pad-cell">${btnUp}</div>
-        <div class="d-pad-cell empty"></div>
-        
-        <div class="d-pad-cell">${btnLeft}</div>
-        <div class="d-pad-cell center"></div>
-        <div class="d-pad-cell">${btnRight}</div>
-        
-        <div class="d-pad-cell empty"></div>
-        <div class="d-pad-cell">${btnDown}</div>
-        <div class="d-pad-cell empty"></div>
-    </div></div>`;
-    actionEl.innerHTML = html;
-
-    document.querySelectorAll('.direction-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const tgt = parseInt(e.target.dataset.target, 10);
-            executeMovementSteps(stepsRemaining, tgt);
-        });
-    });
+  // End of movement
+  await resolveTileInteraction();
 }
 
 async function resolveTileInteraction() {
   const ds = getDungeonState();
+  
+  // Reveal current tile if it was hidden
+  const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
+  const cell = floorMap.cells.find(c => c.index === ds.playerPosition);
+  if (cell && cell.hidden) {
+      revealTile(ds.playerPosition);
+      import('../mapEngine.js').then(({ revealTileObject }) => {
+          revealTileObject(ds.playerPosition, cell.object);
+      });
+  }
+
   const interaction = handleTileInteraction();
 
   if (interaction.type === 'exit_cleared') {
@@ -387,7 +381,13 @@ async function resolveTileInteraction() {
       const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
       const boardContainer = document.getElementById('boardContainer');
       renderFloorMap(floorMap, boardContainer, ds.mapData.theme);
-      movePlayerToken(ds.playerPosition, false);
+      
+      // Wait for DOM to paint so movePlayerToken can calculate cell offset
+      setTimeout(() => {
+          movePlayerToken(ds.playerPosition, false);
+          centerCameraOnPlayer();
+      }, 100);
+      
       await showFloorTitle(floorMap.floor);
       showMoveUI();
       return;
@@ -579,10 +579,11 @@ function showDungeonClear() {
       const gw = gs.recruitedWanderers.find(w => w.id === ds.wanderer.id);
       if (gw) {
           gw.status = 'idle';
-          gw.currentHp = ds.wanderer.vit * 5 + 50; 
+          gw.curHp = ds.currentHp;
+          gw.curSanity = ds.sanity;
       }
       inv.safeBag.forEach(it => module.addItemToStorage(it));
-      module.progressTownLevel(ds.mapData.mapLv);
+      progressTownLevel(ds.mapData.mapLv);
       module.clearActiveDungeon();
   });
 
@@ -635,7 +636,7 @@ function renderHUD(ds) {
     html += `<div class="hud-status-effects">` + ds.statusEffects.map(e => {
         const durText = e.duration === Infinity ? '∞' : `${e.duration}`;
         const labelText = e.labelKey ? t(e.labelKey, e.id) : (e.label || e.id);
-        return `<span class="status-badge" title="${labelText} (${durText}턴)">${e.icon || '⚠️'} ${durText}</span>`;
+        return `<span class="status-badge" title="${labelText} (${durText}칸)">${e.icon || '⚠️'} ${durText}</span>`;
     }).join('') + `</div>`;
   }
 
@@ -681,6 +682,7 @@ setUpdateCallback((newState) => {
   const ds = newState;
   const container = document.getElementById('app'); // Fallback if needed, though state pushes update
   if (ds) {
+    refreshTopbar(ds);
     refreshHUD(ds);
     updateSanityVFX(ds);
     const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];

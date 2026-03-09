@@ -10,7 +10,9 @@ export const SETTINGS = {
 
     // Movement
     hpRegenPerTile: 1,      // HP recovered per tile moved
-    sanityCostPerMove: 2,   // Sanity lost per move roll (not per tile)
+    sanityCostPerMove: 2,   // Sanity lost per move roll (not per tile) - legacy
+    sanityCostPerTile: 1,   // Sanity cost per tile moved
+    weightSanityMult: [0.5, 1.0, 1.5, 2.0, 3.0], // Sanity multiplier based on weight tier
 
     // Combat
     baseHitChance: {
@@ -90,7 +92,7 @@ export const SETTINGS = {
     ],
 
     // Visibility (Fog of War)
-    baseViewDistance: 2,     // Base tile view range
+    baseViewDistance: 1,     // Base tile view range
     torchViewBonus: 2,       // Additional view range with torch
 
     // ─── Weight System ───

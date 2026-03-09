@@ -36,7 +36,10 @@ export function renderDungeon(el) {
 
   function getActionBarHTML() {
     if (activeMapId && state.selectedMap?.id === activeMapId) {
-      return `<button class="btn-town-primary" id="btnResumeDungeon">⚔️ ${t('ui.dungeon.resume_dungeon', '이어하기')}</button>`;
+      return `
+        <button class="btn-town-secondary" id="btnCancelDungeon" style="color:var(--danger-color); border-color:var(--danger-color);">포기</button>
+        <button class="btn-town-primary" id="btnResumeDungeon">⚔️ ${t('ui.dungeon.resume_dungeon', '이어하기')}</button>
+      `;
     } else if (!activeMapId && state.selectedMap && state.selectedWanderer) {
       return `<button class="btn-enter-dungeon" id="btnNextPrep">➡️ ${t('ui.dungeon.next', '다음 (Next)')}</button>`;
     } else {
@@ -148,6 +151,23 @@ export function renderDungeon(el) {
   if (resumeBtn) {
     resumeBtn.addEventListener('click', () => {
       changeScene('dungeon', { resume: true });
+    });
+  }
+
+  const cancelBtn = el.querySelector('#btnCancelDungeon');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      showConfirmModal(
+        t('ui.dungeon.cancel_title', '탐험 포기'),
+        t('ui.dungeon.cancel_confirm', '현재 진행 중인 탐험을 포기하시겠습니까? (획득한 아이템을 잃고 페널티를 받을 수 있습니다)'),
+        () => {
+          import('../../gameState.js').then(({ clearActiveDungeon }) => {
+            clearActiveDungeon();
+            renderDungeon(el);
+            showToast("탐험을 포기하고 마을로 귀환했습니다.");
+          });
+        }
+      );
     });
   }
 

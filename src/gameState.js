@@ -143,6 +143,16 @@ const state = {
     innSlots: [null, null],
 };
 
+// ─── Wanderers ───
+export function handleWandererDeath(wandererId) {
+    const w = state.recruitedWanderers.find(rw => rw.id === wandererId);
+    if (w) {
+        w.status = 'dead';
+        w.curHp = 0;
+        saveState();
+    }
+}
+
 // ─── Persistence ───
 
 export function saveState() {
@@ -281,6 +291,13 @@ export function getState() {
     checkDailyReset();
     return state;
 }
+
+export function progressTownLevel(mapLv) {
+    if (!state.dungeonStatuses) state.dungeonStatuses = {};
+    state.dungeonStatuses[`dungeon_${mapLv}`] = 'cleared';
+    saveState();
+}
+
 
 // ─── Building Level Helpers ───
 
@@ -920,6 +937,12 @@ export function setActiveDungeon(ds) {
 }
 
 export function clearActiveDungeon() {
+    if (state.activeDungeon && state.activeDungeon.wanderer) {
+        const globalW = state.recruitedWanderers.find(w => w.id === state.activeDungeon.wanderer.id);
+        if (globalW && globalW.status === 'exploring') {
+            globalW.status = 'idle';
+        }
+    }
     state.activeDungeon = null;
     saveState();
     generateAvailableDungeons();
@@ -1214,13 +1237,16 @@ export function calculateRestCost(wandererId) {
     const w = state.recruitedWanderers.find(rw => rw.id === wandererId);
     if (!w) return null;
 
-    const maxHp = 50 + ((w.vit || 0) * SETTINGS.hpPerStatPoint);
-    const maxSanity = SETTINGS.maxSanity;
+    const maxHp = w.maxHp || (50 + ((w.vit || 0) * SETTINGS.hpPerStatPoint));
+    const maxSanity = w.maxSanity || SETTINGS.maxSanity;
 
-    const hpMissing = Math.max(0, maxHp - (w.curHp || maxHp));
-    const sanityMissing = Math.max(0, maxSanity - (w.curSanity || maxSanity));
+    const curHp = w.curHp !== undefined ? w.curHp : maxHp;
+    const curSanity = w.curSanity !== undefined ? w.curSanity : maxSanity;
 
-    if (hpMissing === 0 && sanityMissing === 0) return null; // Already full
+    const hpMissing = Math.max(0, maxHp - curHp);
+    const sanityMissing = Math.max(0, maxSanity - curSanity);
+
+    if (hpMissing <= 0 && sanityMissing <= 0) return null; // Already full
 
     const goldCost = (hpMissing * SETTINGS.inn.goldPerHp) + (sanityMissing * SETTINGS.inn.goldPerSanity);
     const durationSec = (hpMissing * SETTINGS.inn.secPerHp) + (sanityMissing * SETTINGS.inn.secPerSanity);

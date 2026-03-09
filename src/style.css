@@ -2391,31 +2391,65 @@ button {
    GAME BOARD
    ══════════════════════════════════════════════════ */
 
-.board-container {
+.board-viewport {
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: auto;
+  position: relative;
+  overflow: hidden; /* Hide the overflow from the huge absolute grid */
+  background: var(--bg-card); /* Optional fallback */
+  cursor: grab;
+}
+
+.board-viewport.dragging {
+  cursor: grabbing;
+}
+
+.board-container {
+  width: fit-content;
+  height: fit-content;
+  transform-origin: top left; /* Critical for zooming properly to mouse pointer */
+  display: block; /* Grid layout set dynamically */
 }
 
 .board-container.board-grid {
   display: grid;
   gap: 3px;
-  width: fit-content;
-  height: fit-content;
-  max-width: 560px;
-  max-height: 100%;
-  position: relative;
+  position: absolute;
+  top: 0; left: 0;
   padding: 4px;
-  margin: auto;
+}
+
+/* Button to center camera on player */
+.btn-center-player {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface-light);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: all 0.2sease;
+  z-index: 10;
+}
+
+.btn-center-player:hover {
+  background: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
 }
 
 /* Inner (empty) cells */
 .board-inner-cell {
-  background: rgba(10, 10, 15, 0.6);
-  border-radius: 4px;
+  background: transparent;
+  pointer-events: none;
   aspect-ratio: 1;
 }
 
@@ -2431,8 +2465,26 @@ button {
   min-height: 0;
   aspect-ratio: 1;
   cursor: default;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, opacity 0.4s ease-out; /* Added opacity transition */
   overflow: hidden;
+}
+
+.tile[data-visibility="shroud"] {
+  opacity: 0.15;
+  background: rgba(26, 26, 46, 0.2);
+  border: 1px dashed var(--border);
+  pointer-events: auto;
+}
+
+.tile[data-visibility="shroud"]:hover {
+  opacity: 0.3;
+  border-style: solid;
+  border-color: var(--gold-dim);
+}
+
+.tile[data-visibility="fog"] {
+  opacity: 0.4;
+  filter: grayscale(80%) brightness(0.6);
 }
 
 .tile:hover {
@@ -2526,6 +2578,49 @@ button {
     transform: scale(1);
     box-shadow: 0 0 0 transparent;
   }
+}
+
+/* ─── Click-to-Move Styles ─── */
+.tile-clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+  pointer-events: auto !important;
+}
+.tile-clickable:hover {
+  transform: scale(1.05);
+  z-index: 5;
+  box-shadow: inset 0 0 12px rgba(212, 168, 67, 0.2), 0 0 8px rgba(212, 168, 67, 0.4);
+}
+
+.tile.tile-path-preview {
+  background: rgba(212, 168, 67, 0.4) !important;
+  box-shadow: inset 0 0 8px rgba(212, 168, 67, 0.6) !important;
+  border-color: rgba(212, 168, 67, 0.8) !important;
+  opacity: 1 !important;
+}
+
+.tile-hidden-object {
+  animation: mysteryPulse 2s infinite ease-in-out;
+}
+@keyframes mysteryPulse {
+  0%, 100% { filter: drop-shadow(0 0 2px var(--purple)); }
+  50% { filter: drop-shadow(0 0 8px var(--purple-bright)); transform: scale(1.1); }
+}
+
+.path-preview-info {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 10px;
+  padding: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
 }
 
 /* Dice roll-in animation */
@@ -4343,66 +4438,40 @@ button {
   }
 }
 
-/* ─── Map Themes ─── */
-
-/* Forest (고블린 숲) */
-.board-theme-forest .tile {
-  background: rgba(34, 85, 34, 0.25);
-  border-color: rgba(76, 153, 76, 0.4);
+/* ─── Map Themes (CSS Variables) ─── */
+.board-theme-forest {
+  --theme-color-rgb: 34, 120, 34;
+  --theme-border-rgb: 76, 200, 76;
+}
+.board-theme-mine {
+  --theme-color-rgb: 120, 85, 40;
+  --theme-border-rgb: 200, 160, 80;
+}
+.board-theme-swamp {
+  --theme-color-rgb: 100, 50, 130;
+  --theme-border-rgb: 180, 100, 220;
+}
+.board-theme-citadel {
+  --theme-color-rgb: 130, 30, 30;
+  --theme-border-rgb: 220, 60, 60;
 }
 
-.board-theme-forest .tile-start {
-  background: rgba(34, 120, 34, 0.4);
-  border-color: rgba(76, 200, 76, 0.6);
-}
-
-.board-theme-forest .tile-current {
-  box-shadow: 0 0 8px rgba(76, 200, 76, 0.6);
-}
-
-/* Mine (버려진 광산) */
-.board-theme-mine .tile {
-  background: rgba(100, 70, 30, 0.25);
-  border-color: rgba(160, 120, 60, 0.4);
-}
-
-.board-theme-mine .tile-start {
-  background: rgba(120, 85, 40, 0.4);
-  border-color: rgba(200, 160, 80, 0.6);
-}
-
-.board-theme-mine .tile-current {
-  box-shadow: 0 0 8px rgba(200, 160, 80, 0.6);
-}
-
-/* Swamp (유령의 늪) */
-.board-theme-swamp .tile {
-  background: rgba(80, 40, 100, 0.25);
-  border-color: rgba(140, 80, 180, 0.4);
-}
-
-.board-theme-swamp .tile-start {
-  background: rgba(100, 50, 130, 0.4);
-  border-color: rgba(180, 100, 220, 0.6);
-}
-
-.board-theme-swamp .tile-current {
-  box-shadow: 0 0 8px rgba(180, 100, 220, 0.6);
-}
-
-/* Citadel (암흑 성채) */
+/* Base Theme Application */
+.board-theme-forest .tile,
+.board-theme-mine .tile,
+.board-theme-swamp .tile,
 .board-theme-citadel .tile {
-  background: rgba(100, 20, 20, 0.25);
-  border-color: rgba(180, 40, 40, 0.4);
+  background: rgba(var(--theme-color-rgb), 0.25);
+  border-color: rgba(var(--theme-border-rgb), 0.4);
 }
 
-.board-theme-citadel .tile-start {
-  background: rgba(130, 30, 30, 0.4);
-  border-color: rgba(220, 60, 60, 0.6);
+.board-grid .tile-start {
+  background: rgba(var(--theme-color-rgb), 0.4) !important;
+  border-color: rgba(var(--theme-border-rgb), 0.6) !important;
 }
 
-.board-theme-citadel .tile-current {
-  box-shadow: 0 0 8px rgba(220, 60, 60, 0.6);
+.board-grid .tile-current {
+  box-shadow: 0 0 12px rgba(var(--theme-border-rgb), 0.8) !important;
 }
 
 /* ─── EXP & Level Up ─── */
@@ -4575,35 +4644,37 @@ button {
 
 /* ─── Fog of War ─── */
 .tile {
-  transition: filter 0.5s ease, opacity 0.5s ease;
+  transition: all 0.5s ease;
 }
 
 /* Shroud: Unvisited, unseen */
 .tile[data-visibility="shroud"] {
-  background: #000 !important;
-  border-color: #111 !important;
+  background: rgba(10, 10, 15, 0.6) !important;
+  border-color: rgba(10, 10, 15, 0.6) !important;
   box-shadow: none !important;
   pointer-events: none;
 }
 
-.tile[data-visibility="shroud"] .tile-content,
-.tile[data-visibility="shroud"] .tile-overlay {
-  opacity: 0;
+.tile[data-visibility="shroud"] * {
+  display: none !important;
 }
 
-/* Fog: Visited but not currently visible */
+/* Fog: Visited but not currently visible (Dimmer, lower opacity, but still colorful) */
 .tile[data-visibility="fog"] {
-  filter: grayscale(80%) brightness(40%);
+  background: rgba(var(--theme-color-rgb), 0.45) !important;
+  border-color: rgba(var(--theme-border-rgb), 0.5) !important;
+  filter: brightness(85%) saturate(110%);
 }
 
 .tile[data-visibility="fog"] .tile-overlay {
-  opacity: 0.5;
-  /* Hide detailed objects partly */
+  opacity: 0.3;
 }
 
-/* Visible: Currently in view */
+/* Visible: Currently in view (Bright, high opacity, vivid colors) */
 .tile[data-visibility="visible"] {
-  filter: none;
+  background: rgba(var(--theme-color-rgb), 0.85) !important;
+  border-color: rgba(var(--theme-border-rgb), 1) !important;
+  filter: brightness(110%) saturate(130%) contrast(110%);
   opacity: 1;
 }
 

@@ -14,6 +14,8 @@ import { TILES } from './data/tiles.js';
 let ds = {};
 
 export function initDungeonState(dungeonMap, mapData, wanderer) {
+    const oldLog = ds.logCallback;
+    const oldUpdate = ds.updateCallback;
     const maxHp = 50 + ((wanderer.vit || 0) * 5);
     ds = {
         dungeonMap,
@@ -36,8 +38,8 @@ export function initDungeonState(dungeonMap, mapData, wanderer) {
         encounteredEvents: [],
         monstersDefeated: 0,
         eventsEncountered: 0,
-        logCallback: null,
-        updateCallback: null,
+        logCallback: oldLog,
+        updateCallback: oldUpdate,
     };
 
     enterCurrentFloor();
@@ -45,9 +47,11 @@ export function initDungeonState(dungeonMap, mapData, wanderer) {
 }
 
 export function loadDungeonState(savedDs) {
+    const oldLog = ds.logCallback;
+    const oldUpdate = ds.updateCallback;
     ds = savedDs;
-    ds.logCallback = null;
-    ds.updateCallback = null;
+    ds.logCallback = oldLog;
+    ds.updateCallback = oldUpdate;
 
     if (ds.dungeonMap && ds.dungeonMap.floors) {
         ds.dungeonMap.floors.forEach(floor => {
@@ -126,6 +130,7 @@ export function enterCurrentFloor() {
             if (def && def.boss) {
                 cell.object = 'boss';
                 cell.objectData = { monsterId: def.boss };
+                cell.hidden = false;
                 setTileObject(cell.index, 'boss');
             }
             return;
@@ -134,20 +139,21 @@ export function enterCurrentFloor() {
         const def = TILES[cell.tileDefId];
         if (!def) return;
 
-        // Simple random roll for each cell in the tile (lazy evaluation: roll for every cell based on tile constraints)
-        // A robust engine would count exactly to the bounds.
+        // More robust spawning logic based on the tile definition
         if (def.mobSpawn && def.mobSpawn.pool && def.mobSpawn.pool.length > 0) {
-            if (Math.random() < 0.2) { // 20% chance per cell in mob tiles
+            if (Math.random() < 0.6) { // 60% chance to spawn a monster on a mob tile cell
                 cell.object = 'monster';
                 cell.objectData = { monsterId: def.mobSpawn.pool[Math.floor(Math.random() * def.mobSpawn.pool.length)] };
+                cell.hidden = true;
                 setTileObject(cell.index, 'monster');
                 return;
             }
         }
         if (def.eventSpawn && def.eventSpawn.maxCount > 0) {
-            if (Math.random() < 0.1) { // 10% chance per cell in event tiles
+            if (Math.random() < 0.4) { // 40% chance to spawn an event on an event tile cell
                 cell.object = 'event';
                 cell.objectData = null;
+                cell.hidden = true;
                 setTileObject(cell.index, 'event');
                 return;
             }
@@ -163,6 +169,15 @@ export function enterCurrentFloor() {
     triggerUpdate();
 }
 
+export function revealTile(cellIndex) {
+    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
+    const cell = floorMap.cells.find(c => c.index === cellIndex);
+    if (cell && cell.hidden) {
+        cell.hidden = false;
+        // The actual visual update is handled in mapEngine via revealTileObject
+    }
+}
+
 
 // ─── Dice ───
 export function rollDice(min, max) {
@@ -175,146 +190,51 @@ export function updateVisibility() {
     const hasTorch = hasStatusEffect('torch_buff');
     const viewRange = SETTINGS.baseViewDistance + (hasTorch ? SETTINGS.torchViewBonus : 0);
 
+    const playerCell = floorMap.cells.find(c => c.index === ds.playerPosition);
+    if (!playerCell) return;
+
+    const pr = playerCell.gr;
+    const pc = playerCell.gc;
+
     floorMap.cells.forEach(c => {
-        if (c.visibility === 'visible') c.visibility = 'fog';
+        if (Math.abs(c.gr - pr) <= viewRange && Math.abs(c.gc - pc) <= viewRange) {
+            c.visibility = 'visible';
+            c.visited = true;
+        } else if (c.visited) {
+            c.visibility = 'fog';
+        } else {
+            c.visibility = 'shroud';
+        }
     });
 
-    const q = [[ds.playerPosition, 0]];
-    const visited = new Set([ds.playerPosition]);
-
-    while(q.length > 0) {
-        const [curr, dist] = q.shift();
-        const cell = floorMap.cells.find(c => c.index === curr);
-        if (cell) {
-            cell.visibility = 'visible';
-            cell.visited = true;
-        }
-        
-        if (dist < viewRange) {
-            const adj = floorMap.adjacency[curr] || [];
-            adj.forEach(a => {
-                if (!visited.has(a)) {
-                    visited.add(a);
-                    q.push([a, dist + 1]);
-                }
-            });
-        }
-    }
     triggerUpdate();
 }
 
 // ─── Movement ───
-export function executeMovePhase() {
+export function executeClickMove(targetCellIndex) {
     ds.phase = 'move';
+    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
     const weightStatus = getWeightStatus(ds.wanderer?.str || 0);
-    const rawRoll = rollDice(1, SETTINGS.moveDiceSides);
-    const dicePenalty = weightStatus.dicePenalty || 0;
-    const roll = Math.max(1, rawRoll + dicePenalty);
-    ds.turn++;
+    const weightMultIdx = Math.min(Math.max(weightStatus.tier, 0), SETTINGS.weightSanityMult.length - 1);
+    const weightMult = SETTINGS.weightSanityMult[weightMultIdx];
     
-    if (!hasStatusEffect('torch_buff')) {
-        const reduced = reduceSanity(SETTINGS.sanityCostPerMove);
-        log(t('logs.move_dice_sanity', { roll, cost: reduced }));
-    } else {
-        log(t('logs.move_dice_torch', { roll }));
-    }
-
+    const baseSanityCost = SETTINGS.sanityCostPerTile || 1;
+    const finalSanityCost = Math.ceil(baseSanityCost * weightMult);
+    
     return {
-        roll,
-        rawRoll,
-        dicePenalty,
-        weightIcon: weightStatus.icon,
-        stepsRemaining: roll,
-        path: []
+        sanityCostPerTile: finalSanityCost,
+        weightIcon: weightStatus.icon
     };
 }
 
-export function processMovementSteps(stepsRemaining, currentPath, chosenNextCell = null) {
-    const floorMap = ds.dungeonMap.floors[ds.currentFloorIndex];
-    let pos = ds.playerPosition;
-    let pathSegment = [];
-    let stoppedForChoice = false;
-    let availableChoices = [];
-    let stoppedForEvent = false;
+export function incrementTurn() {
+    ds.turn++;
+    triggerUpdate();
+}
 
-    // To prevent backtracking, we track the cell we just came from.
-    // If we have a currentPath from a multi-step move, we came from currentPath's last element.
-    // Otherwise, we use the persistently stored ds.previousPosition.
-    let prevPos = ds.previousPosition;
-    if (currentPath.length > 0) {
-        prevPos = currentPath[currentPath.length - 1];
-    }
-
-    while(stepsRemaining > 0) {
-        const adj = floorMap.adjacency[pos] || [];
-        let options = adj;
-        
-        // Filter out the position we just came from
-        if (prevPos !== null) {
-            options = adj.filter(x => x !== prevPos);
-        }
-
-        if (chosenNextCell !== null) {
-            options = [chosenNextCell];
-            // Clear chosen cell after applying it
-            chosenNextCell = null;
-        }
-
-        // If there are literally no options, we must be at a dead end
-        if (options.length === 0) {
-             // If we hit a dead end, clear previousPosition so we can turn around on the NEXT turn,
-             // but current movement stops.
-             ds.previousPosition = null;
-             stepsRemaining = 0;
-             break;
-        }
-
-        if (options.length > 1) {
-            stoppedForChoice = true;
-            availableChoices = options;
-            break;
-        }
-
-        // Move to the only option
-        prevPos = pos; // update where we came from
-        pos = options[0]; // move to new position
-        pathSegment.push(pos);
-        stepsRemaining--;
-
-        const cell = floorMap.cells.find(c => c.index === pos);
-        // Stop movement completely only if it's a hard exit/stairs (boss)
-        if (cell.isEnd) {
-             stoppedForEvent = true;
-             break;
-        }
-    }
-
-    if (pathSegment.length > 0) {
-        // The cell BEFORE the final position in this path segment is where we came from
-        if (pathSegment.length > 1) {
-            ds.previousPosition = pathSegment[pathSegment.length - 2];
-        } else {
-            // If segment length is exactly 1, we came from our initial position
-            ds.previousPosition = ds.playerPosition;
-        }
-        ds.playerPosition = pathSegment[pathSegment.length - 1];
-    }
-
-    ds.playerPosition = pos;
+export function handleMoveStepEnd(cellIndex) {
+    ds.playerPosition = cellIndex;
     updateVisibility();
-
-    if (stepsRemaining === 0 && !stoppedForChoice) {
-        ds.phase = 'action';
-    }
-
-    return {
-        pathSegment,
-        stepsRemaining,
-        stoppedForChoice,
-        availableChoices,
-        finalPosition: pos,
-        stoppedForEvent
-    };
 }
 
 export function moveToNextFloor() {
@@ -440,7 +360,7 @@ export function applyStatusEffect(effect) {
     ds.statusEffects = ds.statusEffects.filter(e => e.id !== effect.id);
     ds.statusEffects.push({ ...effect });
     const label = effect.label || effect.labelKey || effect.id;
-    const durText = effect.duration === Infinity ? '∞' : `${effect.duration}턴`;
+    const durText = effect.duration === Infinity ? '∞' : `${effect.duration}칸`;
     log(`${effect.icon || '⚡'} ${label} 부여됨 (${durText})`);
     triggerUpdate();
 }
@@ -542,6 +462,14 @@ export function reduceSanity(amount) {
     }
 
     const finalAmount = Math.ceil(amount * multiplier);
+    
+    // Apply insanity damage to health if dropping below 0
+    if (ds.sanity - finalAmount < 0) {
+        const hpDamage = Math.abs(ds.sanity - finalAmount);
+        ds.currentHp = Math.max(0, ds.currentHp - hpDamage);
+        log(`☠️ 정신력이 붕괴되어 체력이 ${hpDamage} 감소했습니다!`);
+    }
+
     ds.sanity = Math.max(0, ds.sanity - finalAmount);
     return finalAmount;
 }
@@ -566,7 +494,7 @@ export function clearAllStatusEffects() {
 }
 
 /**
- * Tick all status effects (called once per move phase).
+ * Tick all status effects (called per tile movement).
  * Applies DoT damage and decrements duration.
  */
 export function tickStatusEffects() {
@@ -581,9 +509,9 @@ export function tickStatusEffects() {
                 break;
             case 'burn':
                 const reduced = reduceSanity(SETTINGS.burnSanityPerTurn);
-                log(t('logs.status_burn', { sanity: reduced }));
+                if (reduced > 0) log(t('logs.status_burn', { sanity: reduced }));
                 break;
-            // torch_buff: handled in executeMovePhase (prevents sanity loss)
+            // torch_buff: prevents sanity loss, handled in caller
         }
 
         effect.duration--;

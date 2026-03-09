@@ -69,7 +69,7 @@ function renderSlots() {
         if (status.canComplete) {
             html += `
                 <div class="inn-slot occupied">
-                    <img src="${w.portrait}" alt="portrait" class="wanderer-portrait">
+                    <div class="wanderer-portrait">${w.portrait}</div>
                     <div class="inn-slot-name">${wName}</div>
                     <p>치료 완료!</p>
                     <button class="btn-inn-complete" data-slot="${index}">회복 완료</button>
@@ -79,7 +79,7 @@ function renderSlots() {
             const targetTime = Date.now() + (status.remainingSec * 1000);
             html += `
                 <div class="inn-slot occupied">
-                    <img src="${w.portrait}" alt="portrait" class="wanderer-portrait">
+                    <div class="wanderer-portrait">${w.portrait}</div>
                     <div class="inn-slot-name">${wName}</div>
                     <p>치료중...</p>
                     <div class="inn-rest-timer" data-timer-type="inn" data-target="${targetTime}">
@@ -134,6 +134,7 @@ function attachInnEvents(container) {
         let availableCount = 0;
 
         state.recruitedWanderers.forEach(w => {
+            console.log("Wanderer Status Check:", w.nameKey, "Status:", w.status, "HP:", w.curHp);
             // Cannot rest if dead, exploring, or already resting
             if (w.status === 'dead' || w.status === 'exploring' || w.status === 'resting') return;
 
@@ -143,6 +144,11 @@ function attachInnEvents(container) {
             availableCount++;
 
             const wName = w.nameKey ? t(w.nameKey) : (w.name || '방랑자');
+            const maxHp = w.maxHp || (50 + ((w.vit || 0) * SETTINGS.hpPerStatPoint));
+            const curHp = w.curHp !== undefined ? w.curHp : maxHp;
+            const maxSanity = w.maxSanity || SETTINGS.maxSanity;
+            const curSanity = w.curSanity !== undefined ? w.curSanity : maxSanity;
+
             const card = document.createElement('div');
             card.className = 'wanderer-card';
 
@@ -151,11 +157,11 @@ function attachInnEvents(container) {
                     <span class="class-icon">${w.classIcon}</span>
                     <span class="roster-level">Lv.${w.level || 1}</span>
                 </div>
-                <img src="${w.portrait}" alt="portrait" class="roster-portrait">
+                <div class="roster-portrait">${w.portrait}</div>
                 <div class="roster-name">${wName}</div>
                 <div class="roster-stats">
-                    <div class="stat-hp">❤️ ${w.curHp} / ${50 + ((w.vit || 0) * 5)}</div>
-                    <div class="stat-sp">🧠 ${w.curSanity} / ${SETTINGS.maxSanity}</div>
+                    <div class="stat-hp">❤️ ${curHp} / ${maxHp}</div>
+                    <div class="stat-sp">🧠 ${curSanity} / ${maxSanity}</div>
                 </div>
                 <div class="rest-estimate" style="margin-top:8px; font-size:12px; color:#e74c3c;">
                     비용: ${costInfo.goldCost}G<br/>

@@ -1,4 +1,4 @@
-﻿// ─── Combat Engine ───
+// ─── Combat Engine ───
 // Handles turn-based combat logic: initiative, hit/damage, flee, monster AI
 
 import { getDungeonState, getSanityStatus, applyStatusEffect } from './dungeonState.js';
@@ -169,7 +169,9 @@ export function loadCombatState(savedCombat) {
  */
 export function getActiveTarget() {
     if (!combat) return null;
-    return combat.monsters[combat.activeTargetIndex] || combat.monsters[0];
+    let target = combat.monsters[combat.activeTargetIndex];
+    if (target && target.hp > 0) return target;
+    return combat.monsters.find(m => m.hp > 0) || combat.monsters[0];
 }
 
 /**
@@ -179,6 +181,7 @@ export function setActiveTarget(index) {
     if (!combat || index < 0 || index >= combat.monsters.length) return false;
     if (combat.monsters[index].hp <= 0) return false;
     combat.activeTargetIndex = index;
+    combat.lastAttackedIndex = index;
     return true;
 }
 
@@ -428,6 +431,9 @@ export function playerAttack(part) {
             // Auto-select next alive monster
             autoSelectTarget();
             if (typeof window.__refreshCombatMonsters === 'function') window.__refreshCombatMonsters();
+            
+            const activeLabel = document.getElementById('activeTargetLabel');
+            if (activeLabel) activeLabel.textContent = getFighterName(getActiveTarget());
         }
     }
 
